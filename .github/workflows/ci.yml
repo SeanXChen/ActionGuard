@@ -1,0 +1,135 @@
+# Product survival-line CI.
+#
+# Scope (deliberately narrow):
+#   1. Frontend + Rust build
+#   2. Core tests (cargo test)
+#   3. CLI self-checks (policy lint / dry-run / doctor / boundary test)
+#   4. Install / uninstall lifecycle (setup --yes -> doctor --test -> uninstall --yes)
+#
+# NOT included: third-party boundary matrix (Claude Code / Codex / Cursor /
+# Windsurf live probes). Those are manual / community verification + the
+# boundary registry, not CI — CI must never require launching third-party
+# agents on every commit.
+#
+# Notes:
+# - `doctor` answers "is this machine protected right now?"; on a clean CI
+#   runner there is no session, so it legitimately exits 1 with NOT PROTECTED.
+#   The job accepts exit 0/1 and asserts the *output* is correct instead.
+# - `cargo build` compiles the Tauri GUI binary too, so Linux needs the
+#   webkit2gtk system dependencies.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build + Core Test + Lifecycle
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies (Tauri)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev \
+            libxdo-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Frontend build (npm ci + vite)
+        run: |
+          npm ci
+          npm run build
+
+      - name: Rust build
+        working-directory: src-tauri
+        run: cargo build
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: CLI - policy lint (builtin rules)
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          AG="./target/debug/actionguard"; [ -f ./target/debug/actionguard.exe ] && AG=./target/debug/actionguard.exe
+          for f in rules/*.yml; do
+            echo "== $f =="
+            "$AG" policy-lint "$f"
+          done
+
+      - name: CLI - policy dry-run
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          AG="./target/debug/actionguard"; [ -f ./target/debug/actionguard.exe ] && AG=./target/debug/actionguard.exe
+          "$AG" policy-check "sudo rm -rf /" --explain | tail -n 6
+          echo "---"
+          "$AG" policy-check "git push" --explain | tail -n 6
+
+      - name: CLI - doctor (clean machine must answer NOT PROTECTED)
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          AG="./target/debug/actionguard"; [ -f ./target/debug/actionguard.exe ] && AG=./target/debug/actionguard.exe
+          code=0
+          out=$("$AG" doctor 2>&1) || code=$?
+          echo "$out"
+          case $code in
+            0|1) ;;
+            *) echo "::error::doctor unexpected exit code $code"; exit 1 ;;
+          esac
+          echo "$out" | grep -q "ActionGuard Doctor" || { echo "::error::doctor header missing"; exit 1; }
+          echo "$out" | grep -q "rules loaded" || { echo "::error::policy section failed"; exit 1; }
+          echo "$out" | grep -q "NOT PROTECTED" || { echo "::error::clean machine must answer NOT PROTECTED"; exit 1; }
+
+      - name: CLI - boundary test (core boundary)
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          AG="./target/debug/actionguard"; [ -f ./target/debug/actionguard.exe ] && AG=./target/debug/actionguard.exe
+          "$AG" boundary test "Protected Shell (bash/zsh/fish)"
+
+      - name: Lifecycle - setup / doctor --test / uninstall
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          AG="./target/debug/actionguard"; [ -f ./target/debug/actionguard.exe ] && AG=./target/debug/actionguard.exe
+          "$AG" setup --yes
+          code=0
+          out=$("$AG" doctor --test 2>&1) || code=$?
+          echo "$out"
+          case $code in
+            0|1) ;;
+            *) echo "::error::doctor --test unexpected exit code $code"; exit 1 ;;
+          esac
+          echo "$out" | grep -q "Action reached policy: DENY" || { echo "::error::deny simulation failed"; exit 1; }
+          "$AG" uninstall --yes

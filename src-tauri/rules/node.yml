@@ -1,0 +1,90 @@
+# ActionGuard community rules — Node.js / npm / yarn / pnpm
+version: 1
+scope: package
+rules:
+  - id: deny-npm-publish
+    match:
+      category: package
+      command: npm
+      args_contains: ["publish"]
+    action: deny
+    risk: critical
+    reason: "Publishing to the public registry is irreversible"
+
+  - id: confirm-npm-uninstall
+    match:
+      category: package
+      command: npm
+      # Synonyms: `npm remove` / `npm rm` are aliases of `npm uninstall`.
+      args_any: ["uninstall", "remove", "rm"]
+    action: ask
+    risk: medium
+    reason: "Removing packages modifies node_modules and lockfile"
+
+  - id: confirm-npm-install-global
+    match:
+      category: package
+      command: npm
+      # `install` / `i` / `add` are synonyms; the regex pins down -g/--global.
+      args_any: ["install", "i", "add"]
+      regex: "^npm\\s+(install|i|add)\\s+.*(-g|--global).*$"
+    action: ask
+    risk: high
+    reason: "Global installs change the system environment"
+
+  - id: allow-npm-install
+    match:
+      category: package
+      command: npm
+      args_any: ["install", "i", "add", "ci"]
+    action: allow
+    risk: low
+    reason: "Local package install — lockfile protected"
+
+  - id: confirm-yarn-remove
+    match:
+      category: package
+      command: yarn
+      args_contains: ["remove"]
+    action: ask
+    risk: medium
+    reason: "Removing packages modifies node_modules and lockfile"
+
+  - id: allow-yarn-add
+    match:
+      category: package
+      command: yarn
+      args_contains: ["add"]
+    action: allow
+    risk: low
+    reason: "Local package add"
+
+  - id: confirm-pnpm-remove
+    match:
+      category: package
+      command: pnpm
+      args_any: ["remove", "uninstall"]
+    action: ask
+    risk: medium
+    reason: "Removing packages modifies node_modules and lockfile"
+
+  - id: allow-pnpm-add
+    match:
+      category: package
+      command: pnpm
+      args_any: ["add", "install"]
+    action: allow
+    risk: low
+    reason: "Local package install"
+
+  - id: deny-npx-rm-rf
+    match:
+      # `npx` is classified as Package (see policy/classify.rs) — this rule
+      # used to be `category: shell`, which could never match. Both `rm` AND
+      # `-rf` must be present, so `args_contains` (all-of) is correct here.
+      category: package
+      command: npx
+      args_contains: ["rm", "-rf"]
+    action: deny
+    risk: critical
+    reason: "npx running rm -rf — likely destructive"

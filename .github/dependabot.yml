@@ -1,0 +1,27 @@
+# Dependabot — keep the dependency surface of a security product fresh.
+# Enables security updates + version updates for all three ecosystems.
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      tauri:
+        patterns: ["tauri*", "@tauri-apps/*"]
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      vue:
+        patterns: ["vue", "@vitejs/*", "vite", "vue-tsc", "typescript"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

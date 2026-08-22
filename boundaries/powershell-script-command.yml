@@ -1,0 +1,21 @@
+# Class C — PowerShell, non-interactive paths (observe-only)
+# Scripts, -Command, and piped stdin bypass PSReadLine entirely, so no
+# pre-action enforcement is possible on these paths. Actions are observed
+# (logged) only. Verified 2026-08-21: the same denied Remove-Item executed
+# when run via `powershell -NoProfile -Command`.
+name: PowerShell (script/-Command/piped)
+class: protected_shell
+boundary:
+  type: "no hookable boundary"
+  mechanism: "scripts / -Command / piped stdin bypass PSReadLine"
+enforcement:
+  action: observe_only
+  verification: core
+  confidence: high
+scope: "scripts / -Command / piped stdin"
+last_verified: "2026-08-21"
+note: |-
+  Known bypass. There is no pre-action hook on these paths; treat PowerShell
+  protection as partial. Verified 2026-08-21 by
+  scripts/tests/verify-powershell-phase-c.ps1 (marker deleted via -Command
+  while the protected path blocked the same command).

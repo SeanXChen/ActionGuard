@@ -1,0 +1,18 @@
+# Class B — Manus Desktop (My Computer)
+# Execution Approval: local terminal/file/app actions with native per-command
+# approval (Allow Once / Always Allow). ActionGuard as a second, independent
+# policy layer — TBD.
+name: Manus Desktop (My Computer)
+class: exec_approval
+boundary:
+  type: "local per-command approval"
+  mechanism: "native Allow Once / Always Allow approval"
+enforcement:
+  action: observe_only
+  verification: none
+  confidence: low
+last_verified: ""
+note: |-
+  Local terminal/file/app actions with native per-command approval
+  (Allow Once / Always Allow); ActionGuard as an independent second policy
+  layer — TBD.

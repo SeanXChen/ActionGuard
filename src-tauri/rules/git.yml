@@ -1,0 +1,144 @@
+# ActionGuard community rules — git
+version: 1
+scope: git
+rules:
+  - id: deny-push-force-shared-branch
+    match:
+      category: git
+      command: push
+      args_contains: ["--force"]
+      # Exact `--force` only — the token must be followed by whitespace or
+      # end-of-command, so `--force-with-lease` is NOT hard-denied. Must also
+      # reference a shared branch to count as a public-history rewrite.
+      regex: "(?i)(^|\\s)--force(\\s|$).*(main|master|trunk|develop)"
+    action: deny
+    risk: critical
+    reason: "Force-pushing to a shared branch rewrites public history"
+
+  - id: deny-push-f-shared-branch
+    match:
+      category: git
+      command: push
+      args_contains: [" -f "]
+      regex: "(?i)(main|master|trunk|develop)"
+    action: deny
+    risk: critical
+    reason: "Force-pushing to a shared branch rewrites public history"
+
+  # `--force-with-lease` must be listed BEFORE `confirm-push-force` so
+  # first-match-wins picks the more specific (safer) rule.
+  - id: confirm-push-force-with-lease
+    match:
+      category: git
+      command: push
+      args_contains: ["--force-with-lease"]
+    action: ask
+    risk: medium
+    reason: "Force-with-lease is safer but still rewrites history"
+
+  - id: confirm-push-force
+    match:
+      category: git
+      command: push
+      # `-f` is the short form of `--force` — args_any so BOTH spellings trip
+      # this rule (previously `git push -f` fell through to allow-push).
+      args_any: ["--force", "-f"]
+    action: ask
+    risk: high
+    reason: "Force push rewrites repository history"
+
+  - id: confirm-reset-hard
+    match:
+      category: git
+      command: reset
+      args_contains: ["--hard"]
+    action: ask
+    risk: high
+    reason: "git reset --hard discards uncommitted changes"
+
+  - id: confirm-clean-fd
+    match:
+      category: git
+      command: clean
+      args_contains: ["-fd"]
+    action: ask
+    risk: high
+    reason: "git clean removes untracked files"
+
+  - id: confirm-clean-df
+    match:
+      category: git
+      command: clean
+      args_contains: ["-df"]
+    action: ask
+    risk: high
+    reason: "git clean removes untracked files"
+
+  - id: confirm-clean-f
+    match:
+      category: git
+      command: clean
+      args_contains: ["-f"]
+    action: ask
+    risk: medium
+    reason: "git clean -f removes untracked files"
+
+  - id: confirm-clean-d
+    match:
+      category: git
+      command: clean
+      args_contains: ["-d"]
+    action: ask
+    risk: medium
+    reason: "git clean -d removes untracked directories"
+
+  - id: confirm-clean-ndx
+    match:
+      category: git
+      command: clean
+      args_contains: ["-x"]
+    action: ask
+    risk: high
+    reason: "git clean -x also removes ignored files"
+
+  - id: confirm-branch-delete-D
+    match:
+      category: git
+      command: branch
+      args_contains: ["-D"]
+    action: ask
+    risk: medium
+    reason: "Force branch deletion"
+
+  - id: confirm-branch-delete-d
+    match:
+      category: git
+      command: branch
+      args_contains: ["-d"]
+    action: ask
+    risk: low
+    reason: "Branch deletion"
+
+  - id: allow-push
+    match:
+      category: git
+      command: push
+    action: allow
+    risk: low
+    reason: "Normal git push"
+
+  - id: allow-pull
+    match:
+      category: git
+      command: pull
+    action: allow
+    risk: low
+    reason: "Normal git pull"
+
+  - id: allow-fetch
+    match:
+      category: git
+      command: fetch
+    action: allow
+    risk: low
+    reason: "Normal git fetch"

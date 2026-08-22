@@ -1,0 +1,18 @@
+# Class B — Codex
+# Built-in approval_policy; no third-party pre-tool hook protocol.
+name: Codex
+class: exec_approval
+boundary:
+  type: "built-in exec approval (approval_policy)"
+  mechanism: "~/.codex/config.toml: untrusted / on-failure / never"
+enforcement:
+  action: observe_only
+  verification: none
+  confidence: medium
+last_verified: "2026-08-19"
+note: |-
+  Local execution: yes (CLI). Action boundary: built-in approval_policy only;
+  there is no third-party hook protocol, so ActionGuard cannot attach as a
+  pre-action layer. Pre-action: native approval is pre-action but not
+  extensible by ActionGuard. ActionGuard enforcement: not applicable via
+  hook; tool not installed on this machine - documented only, not measured.

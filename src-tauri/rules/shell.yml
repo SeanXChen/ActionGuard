@@ -1,0 +1,145 @@
+# ActionGuard community rules — generic shell commands
+# Each rule maps a command pattern to a decision (allow / ask / deny).
+# Contributions welcome: https://github.com/your-org/actionguard-rules
+version: 1
+scope: shell
+rules:
+  # ---------- destructive commands ----------
+  - id: deny-rm-rf-root
+    match:
+      category: shell
+      command: rm
+      args_contains: ["-rf"]
+      # Only hard-deny a real root / absolute / home / glob wipe. The `\s/`
+      # branch requires whitespace BEFORE the slash, so `rm -rf ./dist` or
+      # `rm -rf build/` (relative paths) fall through to confirm-rm-rf (ask).
+      regex: "^rm\\s+.*((\\s/)|~(\\/|$)|\\*(\\s|$)|\\$HOME)"
+    action: deny
+    risk: critical
+    reason: "rm -rf against the filesystem root, home, or a glob can wipe everything"
+
+  - id: confirm-rm-rf
+    match:
+      category: shell
+      command: rm
+      args_contains: ["-rf"]
+    action: ask
+    risk: high
+    reason: "Recursive force delete — review what will be removed"
+
+  - id: confirm-rm-fr
+    match:
+      category: shell
+      command: rm
+      args_contains: ["-fr"]
+    action: ask
+    risk: high
+    reason: "Recursive force delete — review what will be removed"
+
+  - id: confirm-rm-r
+    match:
+      category: shell
+      command: rm
+      args_contains: ["-r"]
+    action: ask
+    risk: high
+    reason: "Recursive delete — review what will be removed"
+
+  - id: confirm-rm-f
+    match:
+      category: shell
+      command: rm
+      args_contains: ["-f"]
+    action: ask
+    risk: high
+    reason: "Force delete — no confirmation prompt"
+
+  - id: confirm-rm-no-flags
+    match:
+      category: shell
+      command: rm
+    action: ask
+    risk: medium
+    reason: "File deletion"
+
+  # ---------- privilege escalation ----------
+  - id: deny-sudo
+    match:
+      category: shell
+      command: sudo
+    action: deny
+    risk: critical
+    reason: "Privilege escalation is not allowed inside a protected session"
+
+  - id: deny-su
+    match:
+      category: shell
+      command: su
+    action: deny
+    risk: critical
+    reason: "Privilege escalation is not allowed inside a protected session"
+
+  # ---------- network fetch ----------
+  - id: confirm-curl
+    match:
+      category: shell
+      command: curl
+    action: ask
+    risk: medium
+    reason: "Outbound network fetch — confirm the destination"
+
+  - id: confirm-wget
+    match:
+      category: shell
+      command: wget
+    action: ask
+    risk: medium
+    reason: "Outbound network fetch — confirm the destination"
+
+  # ---------- chmod / chown ----------
+  - id: confirm-chmod
+    match:
+      category: shell
+      command: chmod
+    action: ask
+    risk: medium
+    reason: "Permission change"
+
+  - id: confirm-chown
+    match:
+      category: shell
+      command: chown
+    action: ask
+    risk: medium
+    reason: "Ownership change"
+
+  # ---------- shutdown / reboot ----------
+  - id: deny-shutdown
+    match:
+      category: shell
+      command: shutdown
+    action: deny
+    risk: critical
+    reason: "System shutdown is not allowed inside a protected session"
+
+  - id: deny-reboot
+    match:
+      category: shell
+      command: reboot
+    action: deny
+    risk: critical
+    reason: "System reboot is not allowed inside a protected session"
+
+  # ---------- kill signals ----------
+  - id: confirm-kill-9
+    match:
+      category: shell
+      command: kill
+      # Synonyms: any ONE of these signal spellings trips the rule.
+      args_any: ["-9", "-KILL", "-SIGKILL"]
+    action: ask
+    risk: high
+    reason: "SIGKILL forces termination without cleanup"
+
+  # ---------- default shell allow ----------
+  # Anything not matched above is allowed by the policy engine's default.

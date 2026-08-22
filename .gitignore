@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+
+# Tauri / Rust build output
+src-tauri/target/
+src-tauri/gen/
+
+# Logs — may contain local paths / usernames / internal ports
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Local editors / AI tools — keep the dev environment out of the product repo
+.vscode/*
+!.vscode/extensions.json
+.idea
+.codebuddy/
+.trae/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local ActionGuard runtime data (this is ~/.actionguard; ignore any copy
+# that ever appears inside a checkout)
+.actionguard/
+~/.actionguard/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials.json
+
+# Signing / release credentials
+*.pfx
+*.p12
+*.cer
+*.jks
+
+# Python cache (scripts/hooks)
+__pycache__/
+*.pyc
+
+# Rust
+Cargo.lock.orig

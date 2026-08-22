@@ -1,0 +1,18 @@
+# Class A — CodeBuddy PreToolUse (official first adapter)
+# Tool hook: fires before the agent executes a tool. Deny = no execution.
+name: CodeBuddy PreToolUse
+class: tool_hook
+boundary:
+  type: "CodeBuddy PreToolUse hook"
+  mechanism: "hook → scripts/hooks/ag-hook.py → policy-check → deny before execution"
+enforcement:
+  action: enforced
+  verification: core
+  confidence: high
+last_verified: "2026-08-19"
+note: |-
+  Core-verified: the first officially supported adapter, wired into
+  .codebuddy/settings.json (user or workspace level). The hook is a real
+  pre-action boundary — a deny decision prevents the tool call from running.
+  Requires the adapter script to be reachable; fail-closed unless
+  AG_ALLOW_ON_FAILURE=1.

@@ -1,0 +1,20 @@
+# Class A — Cursor
+# Official hooks.json; pre-tool / pre-shell events, deny supported.
+name: Cursor
+class: tool_hook
+boundary:
+  type: "tool hooks (hooks.json)"
+  mechanism: "preToolUse / beforeShellExecution / beforeMCPExecution; exit 2 = deny; failClosed option"
+enforcement:
+  action: enforced
+  verification: none
+  confidence: medium
+last_verified: "2026-08-19"
+note: |-
+  Local execution: yes (3.11.13 installed). Action boundary: yes - official
+  hooks.json (user: ~/.cursor/hooks.json; project: .cursor/hooks.json).
+  Pre-action: yes - beforeShellExecution / preToolUse can deny (exit 2,
+  Claude Code-compatible) or rewrite inputs. ActionGuard enforcement: not
+  configured (~/.cursor/hooks.json absent) and defaults fail-open; mechanism
+  probed on this machine (binary contains beforeShellExecution), no hook
+  attached.

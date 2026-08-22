@@ -1,0 +1,16 @@
+# Class F — Manus Cloud (remote automation)
+# Remote Automation: actions never land on this machine. Outside the local
+# ActionGuard boundary by address space, not by product choice.
+name: Manus Cloud
+class: remote
+boundary:
+  type: "remote sandbox"
+  mechanism: "cloud worker — no local execution"
+enforcement:
+  action: observe_only
+  verification: none
+  confidence: low
+last_verified: ""
+note: |-
+  Remote sandbox — actions never land on this machine; outside the local
+  ActionGuard boundary (address-space limit, not a product choice).

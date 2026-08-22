@@ -1,0 +1,21 @@
+# Class C — Protected Shell (bash / zsh / fish)
+# Pre-action hook: every interactive command runs through the policy engine
+# before execution. Deny = the command never runs.
+name: Protected Shell (bash/zsh/fish)
+class: protected_shell
+boundary:
+  type: "interactive shell preexec hook"
+  mechanism: "preexec → bridge /preexec → deny blocks before exec"
+enforcement:
+  action: enforced
+  verification: core
+  confidence: high
+scope: "interactive commands"
+last_verified: "2026-08-19"
+note: |-
+  Core-verified on a live machine. Requires an active ActionGuard session:
+  when the session is closed the hook path is offline and the boundary drops
+  to observe-only (current.closed sentinel releases the next command after a
+  deliberate stop). Fail-closed by default: if the bridge is unreachable or
+  the decision cannot be parsed, the command is blocked unless
+  AG_ALLOW_ON_FAILURE=1.

@@ -1,0 +1,18 @@
+# Class B — OpenClaw (native exec boundary)
+# Execution Approval: the agent defines its own exec policy (sandbox/gateway/
+# deny/allowlist/host approvals). ActionGuard can attach as an independent
+# policy layer above it.
+name: OpenClaw
+class: exec_approval
+boundary:
+  type: "native exec boundary"
+  mechanism: "sandbox/gateway/node + deny/allowlist/full + host approvals bound to canonical systemRunPlan (mismatch → approval rejected)"
+enforcement:
+  action: observe_only
+  verification: none
+  confidence: low
+last_verified: ""
+note: |-
+  Native exec boundary: sandbox/gateway/node + deny/allowlist/full + host
+  approvals bound to canonical systemRunPlan (mismatch → approval rejected).
+  Candidate for an independent ActionGuard policy layer — TBD.

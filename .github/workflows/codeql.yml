@@ -1,0 +1,38 @@
+# CodeQL static analysis for a security product.
+# Runs on push to main, every PR, and weekly on Monday.
+# Note: CodeQL must also be enabled in the repository's Security settings
+# (Settings → Code security and analysis → Code scanning). For public repos
+# it is free.
+name: "CodeQL"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 12 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Frontend only for now. The Rust engine is covered by cargo test +
+        # clippy (see ci.yml) and dependency scanning (Dependabot).
+        language: ["javascript-typescript"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3

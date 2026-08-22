@@ -1,0 +1,18 @@
+# Class A — Claude Code
+# Official PreToolUse/PostToolUse hooks; protocol matches CodeBuddy.
+name: Claude Code
+class: tool_hook
+boundary:
+  type: "tool hooks (PreToolUse/PostToolUse)"
+  mechanism: "settings.json hooks; PreToolUse exit 2 = deny (documented)"
+enforcement:
+  action: enforced
+  verification: none
+  confidence: medium
+last_verified: "2026-08-19"
+note: |-
+  Local execution: yes (CLI). Action boundary: yes - official hooks in
+  settings.json. Pre-action: yes - PreToolUse fires before a tool runs;
+  exit 2 blocks the action (same protocol as the CodeBuddy adapter).
+  ActionGuard enforcement: tool not installed on this machine, so no live
+  probe - documented only, not measured.

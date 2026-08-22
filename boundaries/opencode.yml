@@ -1,0 +1,14 @@
+# Class A — OpenCode (IDE automation)
+# Candidate Tool-Hook boundary. Not yet verified.
+name: OpenCode
+class: tool_hook
+boundary:
+  type: "IDE automation pre-action hook"
+  mechanism: "unverified"
+enforcement:
+  action: observe_only
+  verification: none
+  confidence: low
+last_verified: ""
+note: |-
+  IDE automation — needs a real pre-action hook probe; class unverified.

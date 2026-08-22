@@ -1,0 +1,47 @@
+[package]
+name = "actionguard"
+version = "0.2.0"
+default-run = "actionguard-gui"
+description = "A local safety layer between AI agents and the actions they can take on your machine."
+authors = ["ActionGuard Contributors"]
+license = "Apache-2.0"
+edition = "2021"
+
+[lib]
+name = "actionguard_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "actionguard"
+path = "src/bin/cli.rs"
+
+# The desktop GUI binary. Named with a `-gui` suffix so it does not
+# collide with the CLI on case-insensitive filesystems (NTFS treats
+# `ActionGuard.exe` and `actionguard.exe` as the same file). The CLI's
+# `protect` subcommand looks for this binary next to itself.
+[[bin]]
+name = "actionguard-gui"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+notify = "6"
+walkdir = "2"
+dirs = "5"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
+anyhow = "1"
+sha2 = "0.10"
+rfd = "0.14"
+uuid = { version = "1", features = ["v4"] }
+regex = "1"
+clap = { version = "4", features = ["derive"] }
+
+[target."cfg(any(target_os = \"macos\", target_os = \"linux\", target_os = \"windows\"))".dependencies]
+windows-sys = "0.59"

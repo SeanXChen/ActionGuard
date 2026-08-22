@@ -1,0 +1,103 @@
+# ActionGuard community rules — Python / pip / poetry / uv / conda
+version: 1
+scope: package
+rules:
+  - id: confirm-pip-install-upgrade
+    match:
+      category: package
+      command: pip
+      args_contains: ["install"]
+      regex: "^pip\\s+install\\s+.*(-U|--upgrade).*$"
+    action: ask
+    risk: high
+    reason: "Upgrading packages can break the environment"
+
+  - id: confirm-pip-uninstall
+    match:
+      category: package
+      command: pip
+      args_contains: ["uninstall"]
+    action: ask
+    risk: medium
+    reason: "Removing packages changes the environment"
+
+  - id: allow-pip-install
+    match:
+      category: package
+      command: pip
+      args_contains: ["install"]
+    action: allow
+    risk: low
+    reason: "Local pip install"
+
+  - id: confirm-pip3-uninstall
+    match:
+      category: package
+      command: pip3
+      args_contains: ["uninstall"]
+    action: ask
+    risk: medium
+    reason: "Removing packages changes the environment"
+
+  - id: allow-pip3-install
+    match:
+      category: package
+      command: pip3
+      args_contains: ["install"]
+    action: allow
+    risk: low
+    reason: "Local pip3 install"
+
+  - id: confirm-poetry-remove
+    match:
+      category: package
+      command: poetry
+      args_contains: ["remove"]
+    action: ask
+    risk: medium
+    reason: "Removing packages changes the environment"
+
+  - id: allow-poetry-add
+    match:
+      category: package
+      command: poetry
+      args_any: ["add", "install"]
+    action: allow
+    risk: low
+    reason: "Local poetry add/install"
+
+  - id: confirm-uv-remove
+    match:
+      category: package
+      command: uv
+      args_any: ["remove", "uninstall"]
+    action: ask
+    risk: medium
+    reason: "Removing packages changes the environment"
+
+  - id: allow-uv-add
+    match:
+      category: package
+      command: uv
+      args_any: ["add", "pip", "install"]
+    action: allow
+    risk: low
+    reason: "Local uv install"
+
+  - id: confirm-conda-remove
+    match:
+      category: package
+      command: conda
+      args_any: ["remove", "uninstall"]
+    action: ask
+    risk: medium
+    reason: "Removing packages changes the environment"
+
+  - id: allow-conda-install
+    match:
+      category: package
+      command: conda
+      args_contains: ["install"]
+    action: allow
+    risk: low
+    reason: "Local conda install"

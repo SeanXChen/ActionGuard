@@ -1,0 +1,17 @@
+# Class A — Windsurf
+# Official Cascade Hooks (pre/post).
+name: Windsurf
+class: tool_hook
+boundary:
+  type: "cascade hooks (pre/post)"
+  mechanism: "official Cascade Hooks; docs now under Devin"
+enforcement:
+  action: enforced
+  verification: none
+  confidence: medium
+last_verified: "2026-08-19"
+note: |-
+  Local execution: yes (IDE/CLI). Action boundary: yes - official Cascade
+  Hooks (pre/post) covering command execution. Pre-action: yes (pre hooks).
+  ActionGuard enforcement: tool not installed on this machine - documented
+  only, not measured.

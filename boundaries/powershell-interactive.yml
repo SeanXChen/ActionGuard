@@ -1,0 +1,23 @@
+# Class C — PowerShell, interactive lines only (Phase C)
+# Pre-action hook on interactive lines: PSReadLine Enter handler sends the
+# line to the bridge before execution. On deny the line is reverted and the
+# keypress swallowed — the command never reaches the execution pipeline.
+# Known bypass (separate registry entry): scripts, -Command, piped stdin.
+name: PowerShell (PSReadLine interactive)
+class: protected_shell
+boundary:
+  type: "PSReadLine Enter handler (Phase C)"
+  mechanism: "interactive line → bridge /preexec → deny reverts the line"
+enforcement:
+  action: enforced
+  verification: core
+  confidence: high
+scope: "interactive lines"
+last_verified: "2026-08-21"
+note: |-
+  Phase C (since 2026-08-19, end-to-end verified 2026-08-21 by
+  scripts/tests/verify-powershell-phase-c.ps1): the protected path blocks a
+  denied Remove-Item (exit 126, marker survives) and the hook script's
+  fail-closed logic returns BLOCK with no session and ALLOW with the
+  clean-teardown sentinel. Interactive only — the non-interactive paths are a
+  separate observe-only registry entry.
