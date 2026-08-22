@@ -2,7 +2,7 @@
 name = "actionguard"
 version = "0.2.0"
 default-run = "actionguard-gui"
-description = "A local safety layer between AI agents and the actions they can take on your machine."
+description = "A local, user-controlled safety boundary for AI-powered automation."
 authors = ["ActionGuard Contributors"]
 license = "Apache-2.0"
 edition = "2021"

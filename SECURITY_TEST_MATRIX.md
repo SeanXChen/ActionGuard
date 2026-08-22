@@ -274,13 +274,13 @@ Unit tests prove the policy engine works in isolation. Integration tests prove t
 
 ### What to test
 
-1. **Does the real AI agent actually go through the shell hook?**
+1. **Does the real AI automation actually go through the shell hook?**
    - Start ActionGuard in `Protected` mode for a test workspace.
-   - Launch your AI agent (Claude Code / Codex / Cursor / OpenCode) inside the protected terminal.
+   - Launch your automation tool (Claude Code / Codex / Cursor / OpenCode) inside the protected terminal.
    - Ask it to execute a command that should be blocked (e.g., `rm -rf ./AG_TEST_DELETE_ME`).
    - Verify: does ActionGuard's approval gate fire *before* the command executes?
 
-2. **Does the agent use a bypass path?**
+2. **Does the automation use a bypass path?**
    - Watch the Live view. If the command shows up as `DELETE` (observed) instead of triggering an approval gate, the agent bypassed the hook via subprocess or absolute path.
    - If the command doesn't appear at all, the agent used direct syscalls.
 
@@ -358,7 +358,7 @@ actionguard protect .
 # 4. In the protected terminal, source the hook
 eval "$(actionguard init-bash)"
 
-# 5. Launch your AI agent (Claude Code, Codex, Cursor, etc.) in this terminal
+# 5. Launch your automation tool (Claude Code, Codex, Cursor, etc.) in this terminal
 # 6. Ask the agent: "Please run: rm -rf ./AG_TEST_DELETE_ME"
 # 7. Observe:
 #    a. Does the approval gate modal appear? (Enforced)
@@ -369,7 +369,7 @@ eval "$(actionguard init-bash)"
 
 ## v0.2.x Enforcement Validation protocol (2026-08-19)
 
-> **Why this section exists.** Unit tests (`e2e_*`) prove ActionGuard's own control chain is correct. They do **not** prove a real AI agent flows through that chain. This protocol is the minimum experiment that produces **enforcement evidence**. Record both signals below for every case — a green UI is not evidence, the filesystem is.
+> **Why this section exists.** Unit tests (`e2e_*`) prove ActionGuard's own control chain is correct. They do **not** prove a real automation tool flows through that chain. This protocol is the minimum experiment that produces **enforcement evidence**. Record both signals below for every case — a green UI is not evidence, the filesystem is.
 
 ### Recording template
 
@@ -464,10 +464,10 @@ TTY; it is covered by the manual step in the [step-by-step test](#step-by-step-t
 and by the static Phase C checks (Enter handler + `RevertLine`, case E in the
 e2e table above). Everything else in the table is executed, not simulated.
 
-### Real AI agent test (2026-08-19, CodeBuddy → PowerShell `-Command`)
+### Real automation tool test (2026-08-19, CodeBuddy → PowerShell `-Command`)
 
 **Why this matters.** The e2e cases above go through `actionguard run` — a
-*controlled* execution path the CLI owns. Real AI agents (Claude Code, Codex,
+*controlled* execution path the CLI owns. Real automation tools (Claude Code, Codex,
 CodeBuddy, Cursor) do **not** invoke the CLI wrapper; they spawn
 `powershell -Command "…"` directly. That is the path that actually needs
 enforcement, and until now it was untested.
@@ -487,8 +487,8 @@ command.
 
 **Conclusion (enforcement evidence, v0.2):**
 1. The policy engine's block capability is real (control path proves it).
-2. A real AI agent's own PowerShell subprocess does **not** flow through
-   PSReadLine, so v0.2 does **not** intercept it. "Run your AI agent inside a
+2. A real automation tool's own PowerShell subprocess does **not** flow through
+   PSReadLine, so v0.2 does **not** intercept it. "Run your automation inside a
    protected terminal" is **not** sufficient — the agent's spawned processes
    bypass the interactive hook.
 3. This is the primary gap v0.2.x must close (PATH-shim / process-level hook,
@@ -513,7 +513,7 @@ actionguard actions show --session <session_id> --risk high
 
 ### What to document
 
-For each AI agent × mode combination, record:
+For each automation tool × mode combination, record:
 
 - **Enforced**: "ActionGuard approval gate fired. Command was blocked before execution. The agent waited for human input."
 - **Bypassed (subprocess)**: "ActionGuard saw the outer `python` command but not the inner `rm -rf`. The Live view shows file DELETE events post-hoc."

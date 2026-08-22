@@ -8,7 +8,7 @@ Thank you for your interest in ActionGuard. All contribution types are welcome: 
 
 ## The most valuable contribution: Boundary Verification
 
-ActionGuard runs on **honest, measured data** — not claims. The project's core asset is its boundary registry: what actually happens when an AI agent's action hits a boundary on a real machine.
+ActionGuard runs on **honest, measured data** — not claims. The project's core asset is its boundary registry: what actually happens when an AI-powered automation action hits a boundary on a real machine.
 
 The single most valuable thing you can contribute is a **verification report**: install ActionGuard on a real AI automation tool (CodeBuddy, Claude Code, Codex, Cursor, Windsurf, OpenClaw, Manus, ...), run a boundary test, and record what actually happened.
 
