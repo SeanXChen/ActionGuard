@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Instructions for AI coding agents working on ActionGuard.
+Instructions for AI coding assistants working on ActionGuard.
 
 You are modifying a **security product**. Do not infer enforcement from policy
 decisions. Do not weaken safety defaults to make code simpler.

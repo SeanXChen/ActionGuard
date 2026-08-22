@@ -53,7 +53,7 @@ Current scope (**v0.2**): **File, Shell, Git, Package, Secret** actions on your 
 
 ## Why it exists
 
-- **The action boundary is the attack surface.** AI agents are given `execute` permission by default, and nothing verifies what they actually do. Terminal execution is the first boundary ActionGuard protects in v0.2.
+- **The action boundary is the attack surface.** AI-powered automation is given `execute` permission by default, and nothing verifies what it actually does. Terminal execution is the first boundary ActionGuard protects in v0.2.
 - **Detection is not protection.** "We logged it" is not "we stopped it". ActionGuard distinguishes the two on every path it supports — see the [matrix](#current-protection-matrix).
 - **Security fragmentation is a safety gap.** As users adopt multiple automation tools, their security controls become fragmented across vendor-specific policies and approval systems — and none of them talk to each other. ActionGuard provides one independent policy layer that spans boundaries, instead of asking the user to trust N vendor-specific ones.
 - **Vendor-specific controls create inconsistent safety boundaries.** Protection that works for one agent but not another leaves a gap. Because ActionGuard attaches to *boundaries* rather than brands, any tool exposing a hookable pre-action boundary can be enforced — and anything that can't is labeled explicitly, never implied.

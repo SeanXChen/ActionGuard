@@ -53,3 +53,8 @@ __pycache__/
 
 # Rust
 Cargo.lock.orig
+
+# Release assets — kept local for GitHub Releases, not committed
+release/
+social-preview.png
+SHA256SUMS

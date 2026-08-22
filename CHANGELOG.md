@@ -262,7 +262,7 @@ enforcement claims verifiable and honest.
 ## [0.2.0] — 2026-08-18
 
 The headline change: **ActionGuard is no longer a file monitor — it is an
-Action Safety Layer that sits between AI agents and the actions they can take
+Action Safety Layer that sits between AI-powered automation and the actions it can take
 on your machine.** Four layers (Observe → Classify → Policy → Gate), five
 action categories, a real pre-execution approval gate, a developer-first CLI,
 and a new headline metric (Agent Actions Protected).
@@ -335,8 +335,8 @@ and a new headline metric (Agent Actions Protected).
 ### Changed
 
 - **Positioning** — README rewritten. Tagline: "ActionGuard adds a local safety
-  layer between AI agents and the actions they can take on your machine."
-  Category is now "Open-source AI Agent Action Safety Layer".
+  layer between AI-powered automation and the actions it can take on your machine."
+  Category is now "Open-source AI Action Safety Layer".
 - **SessionView redesign** — replaces the v0.1 4-cell count-grid with the
   Action Ledger layout described above.
 - **`commands.rs`** — `ActiveSession` now holds `bridge: Option<Bridge>`,
