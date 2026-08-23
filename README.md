@@ -1,16 +1,49 @@
 # ActionGuard
 
-> **AI can act. You set the boundary.**
->
-> **The agent should not be the final authority over its own actions.**
+### Protect your machine before AI-powered automation acts.
 
-ActionGuard is a **local, user-controlled safety boundary for AI-powered automation**. It evaluates consequential actions — file changes, shell commands, Git operations, package installs, secret access — and, **on supported boundaries**, can enforce policy **before** they affect your machine or other protected resources.
+**Local. Deterministic. Vendor-neutral.**
 
-It does not watch a brand. It watches the **boundary**: the point where an automation's action enters your system. CodeBuddy, Claude Code, OpenClaw, Manus, Codex — they are all just *action sources*. **An action source is only metadata; the boundary is the security primitive.**
+AI-powered automation can read files, execute shell commands, modify Git repositories, install packages, and access secrets. ActionGuard puts an **independent, user-controlled safety boundary** between that automation and your machine — it evaluates consequential actions and, on supported boundaries, enforces policy **before** they affect anything.
 
-ActionGuard is built around a simple principle: **the user should have an independent safety boundary around autonomous actions, regardless of which agent or automation tool produced them.**
+```
+            AI-powered automation
+                      │
+                      ▼
+              ┌──────────────┐
+              │  ActionGuard │
+              │              │
+              │ Allow / Ask  │
+              │    / Deny    │
+              └──────┬───────┘
+                     │
+                     ▼
+                  Machine
+```
 
-> **Attach by boundary, not by brand.**
+**No SDK. No cloud. No model in the decision path.**
+
+**We don't try to secure the AI. We control what it can do to your machine.**
+
+```
+$ actionguard protect
+
+  ✓ Policy loaded
+  ✓ Boundary detected
+  ✓ Enforcement active
+
+  AI-powered automation attempted:  sudo rm -rf /
+
+  ✗ DENIED
+```
+
+> **The automation should not be the final authority over its own actions.**
+
+It does not watch a brand. It watches the **boundary** — the point where an automation's action enters your system. Coding agents are simply the easiest entry point to verify today; desktop automation, browser automation, scripts, and more autonomous systems are the same class of problem. **An action source is only metadata; the boundary is the security primitive.** ActionGuard is built around an **extensible boundary model**, not vendor-specific integrations: any automation system that exposes a supported action boundary can be enforced.
+
+> **Current scope.** ActionGuard focuses on **local file, shell, Git, package, and secret boundaries**, with enforcement varying by integration and platform. It does not yet cover browser, network, API, or remote automation.
+
+> **Attach by boundary, not by brand.** The [Boundary Registry](./BOUNDARIES.md) tracks what each boundary can actually enforce — **verified / observe-only / unsupported** — so "supported" always means *measured*, never *marketed*.
 
 > **Honesty principle**: this README only claims capabilities that are **verified today** — measured on a real machine, recorded in the [Security Test Matrix](./SECURITY_TEST_MATRIX.md). Nothing "planned" is presented as "done".
 
@@ -28,6 +61,7 @@ ActionGuard is built around a simple principle: **the user should have an indepe
 - [Quick Start](#quick-start)
 - [How it works](#how-it-works)
 - [Known limitations](#known-limitations)
+- [Give feedback](#give-feedback)
 - [Contributing](#contributing)
 
 ---
@@ -99,7 +133,7 @@ Then see real enforcement — inside a protected session the same command never 
 
 ```bash
 actionguard protect ./my-project
-# agent runs a destructive command, e.g.  sudo rm -rf /
+# automation runs a destructive command, e.g.  sudo rm -rf /
 ```
 
 ```text
@@ -114,7 +148,7 @@ actionguard protect ./my-project
 
 ## Current protection matrix
 
-> Status measured on **2026-08-21 against ActionGuard v0.2**; each row keeps its own `Last verified`. `Enforced` = the action is gated **before** it executes. `Observe-only` = it is recorded, but not blocked. This matrix is also surfaced live on your machine — run `actionguard boundary list` or `actionguard capabilities`. Full registry: [BOUNDARIES.md](./BOUNDARIES.md).
+> **Verified boundaries, not marketing checkmarks.** Status measured on **2026-08-21 against ActionGuard v0.2**; each row keeps its own `Last verified`. `Enforced` = the action is gated **before** it executes. `Observe-only` = it is recorded, but not blocked. This matrix is also surfaced live on your machine — run `actionguard boundary list` or `actionguard capabilities`. Full registry: [BOUNDARIES.md](./BOUNDARIES.md).
 
 | Boundary | Observe | Enforced | Verification | Last verified |
 |---|---|---|---|---|
@@ -277,6 +311,18 @@ These are real, measured limits — the same ones printed by `actionguard doctor
 4. **Only a few boundaries are verified.** CodeBuddy and the protected shells are Core verified. Cursor, Windsurf, OpenClaw, Codex, and Manus are documented or investigating — not yet enforced.
 5. **No sandboxing yet.** Running actions in an isolated environment (container / network isolation) is future work.
 6. **`undo` is not exposed on the CLI in v0.2.** The v0.1 snapshot/restore mechanism still exists behind the GUI flow; a CLI `undo` command is planned for v0.3.
+
+---
+
+## Give feedback
+
+ActionGuard is local-first: **no telemetry** is built into the product. Instead, we listen actively — and what we need most is your real experience.
+
+- 🛡 **Did it catch something?** Tell us about your first interception — what got blocked and what you thought: [open the feedback form](https://github.com/SeanXChen/ActionGuard/issues/new?template=feedback.yml) (takes 1 minute).
+- 🐞 **Did something fail to install, start, or protect?** [File a bug report](https://github.com/SeanXChen/ActionGuard/issues/new?template=bug_report.yml) — it helps us find where users fall off.
+- 💬 Prefer open conversation? [Start a discussion](https://github.com/SeanXChen/ActionGuard/discussions).
+
+We track these signals in [docs/USER_VALIDATION.md](./docs/USER_VALIDATION.md).
 
 ---
 

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discussions
+    url: https://github.com/SeanXChen/ActionGuard/discussions
+    about: Questions, ideas, and "show me your setup" — open threads are welcome.
+  - name: Security
+    url: https://github.com/SeanXChen/ActionGuard/security/advisories/new
+    about: Please report vulnerabilities privately, not in a public issue.

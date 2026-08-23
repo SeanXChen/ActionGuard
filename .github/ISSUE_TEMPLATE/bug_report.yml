@@ -1,0 +1,98 @@
+name: Bug report
+description: Something failed to install, start, or protect. File it here.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please fill in the form below — every field helps us figure out **where in the chain** things broke.
+  - type: input
+    id: version
+    attributes:
+      label: ActionGuard version
+      description: Output of `actionguard --version`. If you couldn't install it, write "n/a".
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Linux (Debian/Ubuntu)
+        - Linux (Fedora/Arch)
+        - WSL
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: shell
+    attributes:
+      label: Shell
+      options:
+        - PowerShell
+        - Bash
+        - Zsh
+        - Fish
+        - cmd.exe
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where did it break?
+      description: Which step of the chain failed?
+      options:
+        - Download / install
+        - `actionguard setup`
+        - `actionguard doctor` reported a problem
+        - Shell hook didn't take effect
+        - First interception (action not blocked/not logged)
+        - GUI didn't start
+        - Policy not applying
+        - Upgrade from an earlier version
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Which AI tool was involved (if any)
+      description: e.g. CodeBuddy, Claude Code, Codex, Cursor, OpenClaw, Windsurf, OpenCode…
+      placeholder: "CodeBuddy"
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands you ran, in order.
+      placeholder: |
+        1. `actionguard setup`
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "What should have happened?"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: "What actually happened? Paste the error output."
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment notes
+      description: SmartScreen / Gatekeeper warnings, antivirus, corporate policy, `PATH` issues, non-default terminal…
+      placeholder: "Optional but often the key clue."
