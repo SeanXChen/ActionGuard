@@ -134,6 +134,18 @@ actionguard protect ./my-project
 
 > **关于绕过的诚实声明。** ActionGuard 只强制**经过受支持边界**的动作。绕过边界的动作会被观察、记录，并标记为 **Bypassed / Unsupported（已绕过 / 不受支持）**——绝不会被默认为已拦截。「我们看到了但没拦住」对一条不受支持的路径而言是正确的、诚实的结果，而不是产品失效。
 
+### 平台状态
+
+> **构建 ≠ 已验证。** CI 在三个平台上都执行编译、测试与安装生命周期——但**只有存在真实机器测试记录时，才会做出「强制」声明**（见 [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md)）。macOS 或 Linux 上的构建通过，不代表这些平台已被完整验证为「强制生效」。
+
+| 平台 | CI 构建 | 生命周期（setup → doctor → uninstall） | 真实机器强制验证 |
+|---|---|---|---|
+| Windows | ✅ | ✅ | ✅ PowerShell 交互式（Phase C）、受保护 Shell |
+| Linux | ✅ | ✅ | ✅ 受保护 Shell（bash/zsh/fish） |
+| macOS | ✅ | ✅ | ⏳ **构建可用——强制能力需平台特定验证**（Gatekeeper、权限、shell hook 行为） |
+
+macOS 与 Linux 二进制已发布，供早期用户帮助验证真实强制效果。如果你使用这些平台，提交一份[边界验证报告](./docs/CONTRIBUTING.md)就是你能做出的最有价值的贡献。
+
 ---
 
 ## 快速开始

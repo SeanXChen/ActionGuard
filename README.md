@@ -136,6 +136,18 @@ actionguard protect ./my-project
 
 > **Honesty about bypasses.** ActionGuard only enforces actions that pass through a **supported boundary**. An action that bypasses a boundary is observed, recorded, and labeled **Bypassed / Unsupported** — never silently claimed as blocked. "We saw it but didn't stop it" is the correct, honest outcome for an unsupported path, not a product failure.
 
+### Platform status
+
+> **Build ≠ Verified.** CI compiles, tests, and runs the install lifecycle on all three platforms — but **enforcement claims are only made where a real-machine test record exists** (see [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md)). A green build on macOS or Linux is not a claim that those platforms are fully enforced.
+
+| Platform | CI build | Lifecycle (setup → doctor → uninstall) | Real-machine enforcement verified |
+|---|---|---|---|
+| Windows | ✅ | ✅ | ✅ PowerShell interactive (Phase C), protected shells |
+| Linux | ✅ | ✅ | ✅ Protected shells (bash/zsh/fish) |
+| macOS | ✅ | ✅ | ⏳ **Build available — enforcement requires platform-specific verification** (Gatekeeper, permissions, shell hook behavior) |
+
+macOS and Linux binaries are published so early adopters can help verify real enforcement. If you're on one of those platforms, a [boundary verification report](./CONTRIBUTING.md) is the most valuable contribution you can make.
+
 ---
 
 ## Quick Start
