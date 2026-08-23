@@ -1,16 +1,49 @@
 # ActionGuard
 
-> **AI 可以行动，边界由你设定。**
->
-> **Agent 不应是自己行动的最终权威。**
+### 在 AI 自动化触碰你的机器之前，保护它。
 
-ActionGuard 是面向 **AI 自动化** 的**本地、由用户掌控的安全边界**。它对文件修改、Shell 命令、Git 操作、包安装、密钥访问等有后果的动作进行评估，并且——**在受支持的边界上**——在动作**真正影响你的机器或其他受保护资源之前**实施策略。
+**本地 · 确定性 · 厂商中立。**
 
-它不监视某个品牌，它监视**边界**——自动化动作进入你系统的那个入口。CodeBuddy、Claude Code、OpenClaw、Manus、Codex 都只是**动作来源**。**动作来源只是元数据，Boundary 才是真正的安全原语。**
+AI 自动化系统可以读取文件、执行 Shell 命令、修改 Git 仓库、安装包、访问密钥。ActionGuard 在自动化系统与你的机器之间，放下一道**独立的、由你掌控的安全边界**——它评估有后果的动作，并且——**在受支持的边界上**——在动作**真正影响任何东西之前**执行策略。
 
-ActionGuard 建立在一个简单原则之上：**无论动作出自哪个 Agent 或自动化工具，用户都应当拥有一个独立于它的、由用户掌控的安全边界。**
+```
+            AI-powered automation
+                      │
+                      ▼
+              ┌──────────────┐
+              │  ActionGuard │
+              │              │
+              │ Allow / Ask  │
+              │    / Deny    │
+              └──────┬───────┘
+                     │
+                     ▼
+                  Machine
+```
 
-> **按边界接入，而非按品牌接入。**
+**无 SDK。无云端。决策路径上没有模型。**
+
+**我们不试图保护 AI 本身。我们控制它对你的机器能做什么。**
+
+```
+$ actionguard protect
+
+  ✓ 策略已加载
+  ✓ 边界已检测
+  ✓ 强制已生效
+
+  AI 自动化尝试执行:  sudo rm -rf /
+
+  ✗ 已拒绝 (DENIED)
+```
+
+> **自动化系统不应是自己行动的最终权威。**
+
+它不监视某个品牌，它监视**边界**——自动化动作进入你系统的那个入口。编码 Agent 只是今天最容易验证的入口；桌面自动化、浏览器自动化、脚本、以及更自主的系统，属于同一类问题。**动作来源只是元数据，Boundary 才是真正的安全原语。** ActionGuard 建立在**可扩展的边界模型**之上，而非厂商专用集成：任何暴露了受支持动作边界的自动化系统都可以被强制。
+
+> **当前范围。** ActionGuard 聚焦**本地文件、Shell、Git、Package、Secret 五类边界**，强制程度因集成与平台而异。浏览器、网络、API、远程自动化目前不在范围内。
+
+> **按边界接入，而非按品牌接入。** [边界登记表](./BOUNDARIES.md) 记录每个边界真正能强制什么——**已验证 / 仅观察 / 不受支持**——所以「支持」永远意味着*实测过*，而不是*宣传过*。
 
 > **诚实原则**：此 README 只宣称**今天已验证**的能力——在真实机器上测过、并记录在 [安全测试矩阵](./SECURITY_TEST_MATRIX.md) 里的能力。没有任何「计划中」被伪装成「已完成」。
 
@@ -98,7 +131,7 @@ actionguard policy-check "git reset --hard HEAD~1" --explain
 
 ```bash
 actionguard protect ./my-project
-# agent 运行破坏性命令，例如  sudo rm -rf /
+# 自动化系统运行破坏性命令，例如  sudo rm -rf /
 ```
 
 ```text
@@ -113,7 +146,7 @@ actionguard protect ./my-project
 
 ## 当前保护矩阵
 
-> 状态于 **2026-08-21 在 ActionGuard v0.2 上实测**；每行保留各自的「最后验证」。 「Enforced」= 动作在**执行前**被拦截。「Observe-only」= 被记录，但不阻止。你也可以在自己机器上实时查看：运行 `actionguard boundary list` 或 `actionguard capabilities`。完整登记表见 [BOUNDARIES.md](./BOUNDARIES.md)。
+> **实测的边界，而不是营销的勾选。** 状态于 **2026-08-21 在 ActionGuard v0.2 上实测**；每行保留各自的「最后验证」。 「Enforced」= 动作在**执行前**被拦截。「Observe-only」= 被记录，但不阻止。你也可以在自己机器上实时查看：运行 `actionguard boundary list` 或 `actionguard capabilities`。完整登记表见 [BOUNDARIES.md](./BOUNDARIES.md)。
 
 | 边界 | 观察 | 强制 | 验证 | 最后验证 |
 |---|---|---|---|---|
