@@ -28,6 +28,7 @@ ActionGuard 建立在一个简单原则之上：**无论动作出自哪个 Agent
 - [快速开始](#快速开始)
 - [工作原理](#工作原理)
 - [已知限制](#已知限制)
+- [反馈](#反馈)
 - [贡献](#贡献)
 
 ---
@@ -275,6 +276,18 @@ actionguard rule search <q> | rule install <file.yml>
 4. **已验证的边界很少。** CodeBuddy 与受保护 Shell 为核心已验证。Cursor、Windsurf、OpenClaw、Codex、Manus 是「已记录」或「调查中」——尚未强制。
 5. **尚无沙箱。** 在隔离环境（容器 / 网络隔离）中运行动作属于未来工作。
 6. **`undo` 在 v0.2 的 CLI 中未暴露。** v0.1 的快照/恢复机制仍存在于 GUI 流程背后；CLI `undo` 命令计划于 v0.3。
+
+---
+
+## 反馈
+
+ActionGuard 是本地优先的：**产品内没有任何遥测**。作为替代，我们主动倾听——我们最需要的是你的真实使用体验。
+
+- 🛡 **它拦住了什么吗？** 告诉我们你的第一次拦截——拦住了什么、你当时怎么想：[打开反馈表单](https://github.com/SeanXChen/ActionGuard/issues/new?template=feedback.yml)（只需 1 分钟）。
+- 🐞 **安装、启动或保护失败了吗？** [提交 bug 报告](https://github.com/SeanXChen/ActionGuard/issues/new?template=bug_report.yml)——这能帮我们找到用户在哪个环节流失。
+- 💬 更喜欢自由讨论？[发起讨论](https://github.com/SeanXChen/ActionGuard/discussions)。
+
+我们会在 [docs/USER_VALIDATION.md](./docs/USER_VALIDATION.md) 中追踪这些信号。
 
 ---
 

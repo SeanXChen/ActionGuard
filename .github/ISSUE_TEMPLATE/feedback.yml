@@ -1,0 +1,90 @@
+name: User feedback
+description: How is ActionGuard working for you? What got blocked, what did you protect, what do you want next?
+title: "[Feedback] "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tell us how ActionGuard is actually working for you. There is no wrong answer — the honest version is the useful version.
+  - type: checkboxes
+    id: status
+    attributes:
+      label: Where are you in the journey?
+      options:
+        - label: I completed install + `setup`
+        - label: `doctor` reports normal
+        - label: ActionGuard is currently running / protecting
+        - label: I got my first interception (something was blocked or logged)
+    validations:
+      required: true
+  - type: textarea
+    id: interception
+    attributes:
+      label: Your first interception
+      description: What action was blocked or logged, and what did you think? (e.g. "Deny — rm -rf, I was glad it stopped.")
+      placeholder: "Describe the moment ActionGuard proved itself — or why you haven't had one yet."
+  - type: dropdown
+    id: agents
+    attributes:
+      label: Which AI automation tools do you actually use? (select all that apply)
+      multiple: true
+      options:
+        - CodeBuddy
+        - Claude Code
+        - Codex
+        - Cursor
+        - OpenClaw
+        - Manus
+        - Windsurf
+        - OpenCode
+        - GitHub Copilot
+        - Other / none
+  - type: checkboxes
+    id: concerns
+    attributes:
+      label: What are you actually protecting against?
+      description: Select all that you personally worry about.
+      options:
+        - label: AI deleting/overwriting my files
+        - label: AI reading my secrets / .env
+        - label: AI running dangerous shell commands
+        - label: AI messing up my Git history
+        - label: AI installing packages unexpectedly
+        - label: Prompt injection attacks
+        - label: Something else (tell us below)
+  - type: textarea
+    id: other_concerns
+    attributes:
+      label: Other concerns
+      description: Anything not in the list above.
+  - type: dropdown
+    id: retention
+    attributes:
+      label: Are you still using ActionGuard?
+      options:
+        - "Yes — running daily"
+        - "Yes — occasionally"
+        - "I installed it, tried it, then stopped"
+        - "I couldn't get it working"
+    validations:
+      required: true
+  - type: textarea
+    id: next_boundary
+    attributes:
+      label: What would you want protected next?
+      description: e.g. "I protect CodeBuddy — can you also cover Cursor / Codex / PowerShell?" This tells us more than any roadmap.
+      placeholder: "The next tool or execution path you want ActionGuard to watch."
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you contribute a boundary verification?
+      options:
+        - "Yes — I can test on a specific tool/OS"
+        - "Maybe — show me how"
+        - "No"
+  - type: textarea
+    id: anything
+    attributes:
+      label: Anything else
+      description: Screenshots, log excerpts, policy files, ideas — paste them here.

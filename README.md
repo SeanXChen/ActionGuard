@@ -28,6 +28,7 @@ ActionGuard is built around a simple principle: **the user should have an indepe
 - [Quick Start](#quick-start)
 - [How it works](#how-it-works)
 - [Known limitations](#known-limitations)
+- [Give feedback](#give-feedback)
 - [Contributing](#contributing)
 
 ---
@@ -277,6 +278,18 @@ These are real, measured limits — the same ones printed by `actionguard doctor
 4. **Only a few boundaries are verified.** CodeBuddy and the protected shells are Core verified. Cursor, Windsurf, OpenClaw, Codex, and Manus are documented or investigating — not yet enforced.
 5. **No sandboxing yet.** Running actions in an isolated environment (container / network isolation) is future work.
 6. **`undo` is not exposed on the CLI in v0.2.** The v0.1 snapshot/restore mechanism still exists behind the GUI flow; a CLI `undo` command is planned for v0.3.
+
+---
+
+## Give feedback
+
+ActionGuard is local-first: **no telemetry** is built into the product. Instead, we listen actively — and what we need most is your real experience.
+
+- 🛡 **Did it catch something?** Tell us about your first interception — what got blocked and what you thought: [open the feedback form](https://github.com/SeanXChen/ActionGuard/issues/new?template=feedback.yml) (takes 1 minute).
+- 🐞 **Did something fail to install, start, or protect?** [File a bug report](https://github.com/SeanXChen/ActionGuard/issues/new?template=bug_report.yml) — it helps us find where users fall off.
+- 💬 Prefer open conversation? [Start a discussion](https://github.com/SeanXChen/ActionGuard/discussions).
+
+We track these signals in [docs/USER_VALIDATION.md](./docs/USER_VALIDATION.md).
 
 ---
 
