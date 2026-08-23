@@ -52,3 +52,11 @@ Maintainers follow:
 - `cargo test` before every merge (CI enforces this).
 - Dependabot for Rust, npm, and GitHub Actions dependencies.
 - Secrets never committed — GitHub Secret Scanning (enabled by default on this public repository) plus manual review of every PR.
+
+## Known dependency vulnerabilities
+
+We track advisories for our dependency tree in GitHub's Dependabot alerts. Not every alert can be fixed by bumping a version — the table below records the ones that are **blocked upstream**, so the status is explicit and not left to guesswork.
+
+| Advisory | Dependency | Affected | Status | Notes |
+|----------|-----------|----------|--------|-------|
+| GHSA (RUSTSEC-2025-0032) — `glib` | `glib` (transitive via Tauri → GTK) | >= 0.15.0, < 0.20.0 | **Blocked upstream** | Tauri 2.x depends on `gtk 0.18`, which pins `glib ^0.18`. The fix requires Tauri upstream to migrate to GTK4 bindings; there is no compatible `glib >= 0.20` we can select today. Actual exposure for ActionGuard is minimal: it is a local desktop app with no network service, and the vulnerable code path (`VariantStrIter` iterator) is not reachable from user-controlled input in our usage. We will re-run `cargo update` when Tauri releases a version that unblocks this dependency. |
