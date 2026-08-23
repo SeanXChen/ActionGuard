@@ -1,10 +1,14 @@
 # ActionGuard
 
 > **AI can act. You set the boundary.**
+>
+> **The agent should not be the final authority over its own actions.**
 
 ActionGuard is a **local, user-controlled safety boundary for AI-powered automation**. It evaluates consequential actions — file changes, shell commands, Git operations, package installs, secret access — and, **on supported boundaries**, can enforce policy **before** they affect your machine or other protected resources.
 
 It does not watch a brand. It watches the **boundary**: the point where an automation's action enters your system. CodeBuddy, Claude Code, OpenClaw, Manus, Codex — they are all just *action sources*. **An action source is only metadata; the boundary is the security primitive.**
+
+ActionGuard is built around a simple principle: **the user should have an independent safety boundary around autonomous actions, regardless of which agent or automation tool produced them.**
 
 > **Attach by boundary, not by brand.**
 
@@ -46,6 +50,10 @@ ActionGuard
   ✓ Action blocked
   ✓ Evidence recorded
 ```
+
+ActionGuard is built around an **extensible boundary model**, not vendor-specific integrations. Different automation systems may expose different enforcement points — tool hooks, execution approval layers, protected runtimes, and system-level boundaries. Today it works with **AI coding tools and any other automation system that exposes a supported action boundary** — it is not limited to one brand or one class of agent.
+
+AI-powered automation is moving from *suggesting* actions to *executing* them. As agents gain access to shells, files, repositories, packages, and local applications, the security boundary around those actions becomes increasingly important.
 
 Current scope (**v0.2**): **File, Shell, Git, Package, Secret** actions on your local machine. That's it. Browser, Network, API/SaaS, and remote automation are deliberately **not** in v0.2.
 
@@ -125,6 +133,8 @@ actionguard protect ./my-project
 | Manus Cloud | N/A | N/A | Remote — cannot be enforced by a local tool | — |
 
 > Two layers of truth: the **Boundary Type** (where the action enters — tool hook, protected shell, exec approval, …) and the **Enforcement Status** (whether it can currently be blocked). Capability Tier details (L1–L4) live in [SECURITY_MODEL.md](./SECURITY_MODEL.md) — the README deliberately does not use them.
+
+> **Honesty about bypasses.** ActionGuard only enforces actions that pass through a **supported boundary**. An action that bypasses a boundary is observed, recorded, and labeled **Bypassed / Unsupported** — never silently claimed as blocked. "We saw it but didn't stop it" is the correct, honest outcome for an unsupported path, not a product failure.
 
 ---
 
