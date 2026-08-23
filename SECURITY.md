@@ -34,8 +34,6 @@ What happens next:
 - We assess severity and keep you informed of the fix timeline.
 - We coordinate disclosure: you get credit in the advisory and changelog, unless you prefer to stay anonymous.
 
-> If private vulnerability reporting is not yet enabled on the repository, report via email instead: **[your security contact email / placeholder]**.
-
 ## Scope
 
 In scope:
@@ -53,4 +51,4 @@ Maintainers follow:
 - Rust `cargo clippy` with warnings denied.
 - `cargo test` before every merge (CI enforces this).
 - Dependabot for Rust, npm, and GitHub Actions dependencies.
-- Secrets never committed — see `docs/CONTRIBUTING.md` for pre-commit checks.
+- Secrets never committed — GitHub Secret Scanning (enabled by default on this public repository) plus manual review of every PR.

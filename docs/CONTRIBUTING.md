@@ -45,9 +45,10 @@ ActionGuard 的核心资产是**诚实的验证数据**。我们不接受「声�
 ## Boundary Verification Report
 
 - **Automation**: [工具名称]
-- **Version**: [版本号]
-- **OS**: [操作系统]
-- **Boundary Class**: [A/B/C/D]
+- **Version**: [精确版本号]
+- **OS**: [操作系统 + shell]
+- **Execution path**: [动作触发方式：agent prompt / CLI / script]
+- **Boundary**: [边界名称，如 "Protected Shell (bash/zsh/fish)"]
 - **Test**: [具体命令或场景]
 - **Expected**: [期望结果]
 - **Actual**: [实际结果]
@@ -146,16 +147,7 @@ footer (optional)
 
 ## 安全漏洞报告
 
-**请不要通过公开 Issue 报告安全漏洞。**
-
-请发送邮件至 [security@actionguard.dev]（替换为真实邮箱），包含：
-
-- 漏洞描述
-- 复现步骤
-- 影响评估
-- 建议修复方案（如有）
-
-我们会在 48 小时内确认收到，并在修复后公开致谢（如你希望）。
+**请不要通过公开 Issue 报告安全漏洞。** 请通过 GitHub 私密漏洞报告私下提交 — 参见 [SECURITY.md](../SECURITY.md)。
 
 ---
 
