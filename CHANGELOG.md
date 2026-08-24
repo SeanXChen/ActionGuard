@@ -214,6 +214,26 @@ of agent issued them.
   classes, never conflated. **Cursor / Windsurf / OpenCode** added as Class A
   (unverified, probe required); Codex stays *"must be measured, not assumed"*.
 
+### Added
+
+- **Facts schema 定稿（Action → Facts → Policy → Verdict）。** `ARCHITECTURE.md`
+  数据模型章节重写，与 `models.rs` 逐一对应：`Action` / `ActionContext` /
+  `RiskLevel` / `Decision` / `DecisionResult` / `PolicySource`，外加策略优先级
+  模型（User → Project → Builtin，Project 只能收紧）与决策缓存状态机。
+- **对抗性 bypass 测试（`tests/bypass/`，23 个用例）。** 边界被当作攻击面
+  测试：路径对抗（`..` 逃逸、大小写变体、8.3 短名、尾随分隔符）、进程来源
+  对抗（source spoofing 不改判、`rm -rf /` 硬拒、sudo 优先）、配置对抗
+  （用户规则优先级、first-match-wins、空匹配 lint 拒绝）。**已知盲区被显式
+  钉住**而不是隐藏：`rm -r -f /`（flag 重排）、`rm -rf/`（无空白）落到 Ask
+  而非 Deny；规则 `path` 匹配大小写敏感；尾随分隔符令 `detect_asset` 失效。
+  一句总结写进了测试 README：*"ActionGuard continuously tests its
+  enforcement boundary against known bypass techniques."*
+- **`PolicySource::Project` 变体（预留）。** v0.3 项目策略的枚举骨架；加载
+  点与"只能收紧"约束已在 `loader.rs` 文档化。当前 CLI 显示 `project` 来源。
+- **`actionguard stats --export <path>`。** 将聚合报告（detected / blocked /
+  enforcement 拆分 / risk breakdown / 每个会话摘要）导出为本地 JSON，用于
+  无遥测的用户验证。
+
 ## [0.2.1] — 2026-08-19
 
 **Enforcement Validation.** This release is scoped to one question: *"can we
