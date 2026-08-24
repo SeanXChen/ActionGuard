@@ -54,6 +54,26 @@ Reports update `boundaries/<tool>.yml` and `SECURITY_TEST_MATRIX.md`.
 
 ---
 
+## The second most valuable contribution: Boundary Discovery
+
+ActionGuard's built-in baseline covers what we **know**. What we don't know yet is worth more: an AI-powered automation behavior that ActionGuard does not understand — a boundary we haven't modeled.
+
+**Found a dangerous agent action that ActionGuard doesn't handle? Report it.** You don't need to write YAML, and you don't need to read the codebase.
+
+We reward **boundary discovery**, not rule writing. Contributions are tiered:
+
+| Tier | What you do | Required skill | Credit |
+|------|-------------|----------------|--------|
+| 1 · Report | "ActionGuard didn't stop X." Action + why it's dangerous, no YAML needed | None | Credited in the boundary backlog |
+| 2 · Repro | Action, environment, expected, actual, reproduction steps | Basic | Credited + linked to the fix |
+| 3 · Policy + Test | Policy rule + golden test (`tests/golden/`) | YAML + Rust test | Credited + maintainer review |
+
+Every accepted discovery becomes a row in [`docs/BOUNDARY_BACKLOG.md`](./docs/BOUNDARY_BACKLOG.md).
+Every new rule ships with a golden test — **a rule without a test is not merged**.
+The queue is curated by maintainers; we review *what you found*, not how well you can write YAML.
+
+---
+
 ## Other contribution types
 
 | Type | Where | Notes |

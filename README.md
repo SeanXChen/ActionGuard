@@ -62,6 +62,7 @@ It does not watch a brand. It watches the **boundary** — the point where an au
 - [How it works](#how-it-works)
 - [Known limitations](#known-limitations)
 - [Give feedback](#give-feedback)
+- [Using ActionGuard in your company?](#using-actionguard-in-your-company)
 - [Contributing](#contributing)
 
 ---
@@ -326,11 +327,19 @@ We track these signals in [docs/USER_VALIDATION.md](./docs/USER_VALIDATION.md).
 
 ---
 
+## Using ActionGuard in your company?
+
+ActionGuard is local-first, but we're actively exploring **team deployment and enterprise use cases** — shared policy, audit-friendly exports, managed rule packs.
+
+If *"can this work for a team?"* is a question you're asking, we'd like to hear it: [start a discussion](https://github.com/SeanXChen/ActionGuard/discussions) or [file an enterprise-inquiry issue](https://github.com/SeanXChen/ActionGuard/issues/new). That single signal tells us more than a dozen stars.
+
+---
+
 ## Contributing
 
-Contributions are welcome — especially **boundary verification reports** (the asset this project runs on). See [CONTRIBUTING.md](./CONTRIBUTING.md) for report templates, rule format, code conventions, and security reporting. (中文版: [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md))
+Contributions are welcome — especially **boundary discovery** (a dangerous agent action ActionGuard doesn't handle yet — no YAML required) and **boundary verification reports** (the asset this project runs on). See [CONTRIBUTING.md](./CONTRIBUTING.md) for report templates, rule format, code conventions, and security reporting. (中文版: [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md))
 
-See also: [SECURITY_MODEL.md](./SECURITY_MODEL.md) · [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md) · [BOUNDARIES.md](./BOUNDARIES.md) · [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+See also: [SECURITY_MODEL.md](./SECURITY_MODEL.md) · [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md) · [BOUNDARIES.md](./BOUNDARIES.md) · [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) · [docs/FACTS_SCHEMA.md](./docs/FACTS_SCHEMA.md) · [docs/BOUNDARY_BACKLOG.md](./docs/BOUNDARY_BACKLOG.md)
 
 ---
 

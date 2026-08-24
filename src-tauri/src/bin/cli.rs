@@ -114,7 +114,11 @@ enum Cmd {
         observe: bool,
     },
     /// Aggregate metric — actions protected across all sessions.
-    Stats,
+    Stats {
+        /// Write the full report as JSON to this path (local validation).
+        #[arg(long)]
+        export: Option<PathBuf>,
+    },
     /// Capability Tier Model — what ActionGuard can actually do on each path
     /// (L1 observe … L4 system), plus the local execution-path matrix.
     Capabilities,
@@ -204,7 +208,7 @@ fn main() {
         Some(Cmd::InitPowershell) => print_init("powershell"),
         Some(Cmd::Run { cmd }) => run(&cmd.join(" ")),
         Some(Cmd::Protect { workspace, observe }) => protect(&workspace, observe),
-        Some(Cmd::Stats) => stats(),
+        Some(Cmd::Stats { export }) => stats(export.as_deref()),
         Some(Cmd::Capabilities) => capabilities(),
         Some(Cmd::Boundary { cmd }) => match cmd {
             BoundaryCmd::List => boundary_list(),
@@ -411,6 +415,7 @@ fn policy_list() {
         let src = match r.source {
             PolicySource::Builtin => "builtin",
             PolicySource::User => "user",
+            PolicySource::Project => "project",
         };
         let action = decision_str(r.action);
         let m = match_spec_summary(&r.match_);
@@ -536,6 +541,7 @@ fn rule_search(query: &str) {
         let src = match r.source {
             PolicySource::Builtin => "builtin",
             PolicySource::User => "user",
+            PolicySource::Project => "project",
         };
         let action = decision_str(r.action);
         let m = match_spec_summary(&r.match_);
@@ -1111,7 +1117,7 @@ fn print_manual_instructions(ws: &PathBuf, mode_str: &str) {
 // stats — aggregate metric across all sessions
 // ---------------------------------------------------------------------------
 
-fn stats() {
+fn stats(export: Option<&std::path::Path>) {
     use actionguard_lib::models::EnforcementCounts;
     let sessions = storage::list_sessions().unwrap_or_default();
     let total_sessions = sessions.len();
@@ -1119,6 +1125,13 @@ fn stats() {
     let mut total_blocked = 0u32;
     let mut enforcement = EnforcementCounts::default();
     let mut risk_counts = (0u32, 0u32, 0u32, 0u32); // low, medium, high, critical
+    // v0.2 — user behavior: popups fired vs. user overrides. This is the
+    // product-validation signal (User Override Rate), not vanity telemetry.
+    let mut total_popups = 0u32;
+    let mut total_overrides = 0u32;
+    // v0.2 — per-action rows, collected only when exporting, so local
+    // analysis can compute wait time etc. without any network.
+    let mut ledger: Vec<actionguard_lib::models::Action> = Vec::new();
     for s in &sessions {
         total_detected += s.actions_protected;
         total_blocked += s.actions_blocked;
@@ -1130,6 +1143,14 @@ fn stats() {
         risk_counts.1 += s.risk_counts.medium;
         risk_counts.2 += s.risk_counts.high;
         risk_counts.3 += s.risk_counts.critical;
+        total_popups += s.popups;
+        total_overrides += s.overrides;
+        if export.is_some() {
+            ledger.extend(storage::load_ledger(
+                &s.id,
+                &actionguard_lib::storage::LedgerFilter::default(),
+            ));
+        }
     }
     println!("Actions Detected:   {total_detected}  (recorded across all boundaries)");
     println!("Actions Blocked:    {total_blocked}  (deny decisions)");
@@ -1146,6 +1167,76 @@ fn stats() {
     println!("  MEDIUM:    {}", risk_counts.1);
     println!("  HIGH:      {}", risk_counts.2);
     println!("  CRITICAL:  {}", risk_counts.3);
+    println!();
+    println!("User Behavior (validation signal — is the boundary trusted?):");
+    println!("  Popups (interruptions):  {total_popups}  (approval gates fired)");
+    println!("  User Overrides:           {total_overrides}  (allowed a gated action)");
+    let override_rate = if total_popups > 0 {
+        total_overrides as f64 / total_popups as f64 * 100.0
+    } else {
+        0.0
+    };
+    println!("  Override Rate:            {override_rate:.1}%  (overrides / popups)");
+    println!("    A high rate means the policy is too sensitive or the popup is");
+    println!("    doing the user's thinking for them — not that users are wrong.");
+
+    if let Some(path) = export {
+        #[derive(serde::Serialize)]
+        struct RiskBreakdown {
+            low: u32,
+            medium: u32,
+            high: u32,
+            critical: u32,
+        }
+        #[derive(serde::Serialize)]
+        struct Report<'a> {
+            generated_at: String,
+            total_sessions: usize,
+            total_detected: u32,
+            total_blocked: u32,
+            enforcement: &'a EnforcementCounts,
+            risk: RiskBreakdown,
+            // v0.2 — product-validation metrics
+            popups: u32,
+            overrides: u32,
+            override_rate: f64,
+            // v0.2 — per-action rows (decision × risk × user_override) so the
+            // owner can analyze locally without any telemetry backend.
+            actions: &'a [actionguard_lib::models::Action],
+            sessions: &'a [actionguard_lib::models::SessionSummary],
+        }
+        let report = Report {
+            generated_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs().to_string())
+                .unwrap_or_else(|_| "unknown".to_string()),
+            total_sessions,
+            total_detected,
+            total_blocked,
+            enforcement: &enforcement,
+            risk: RiskBreakdown {
+                low: risk_counts.0,
+                medium: risk_counts.1,
+                high: risk_counts.2,
+                critical: risk_counts.3,
+            },
+            popups: total_popups,
+            overrides: total_overrides,
+            override_rate,
+            actions: &ledger,
+            sessions: &sessions,
+        };
+        let json = serde_json::to_string_pretty(&report).unwrap_or_else(|e| {
+            eprintln!("error: failed to serialize report: {e}");
+            String::new()
+        });
+        if std::fs::write(path, json).is_ok() {
+            println!();
+            println!("Report written to {}", path.display());
+        } else {
+            eprintln!("error: could not write report to {}", path.display());
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

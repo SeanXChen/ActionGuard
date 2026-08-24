@@ -215,6 +215,10 @@ onMounted(async () => {
         <strong>{{ t("home.undo.k") }}</strong>
         <span>{{ t("home.undo.v") }}</span>
       </div>
+      <div class="nrow team-row">
+        <strong>{{ t("home.team.k") }}</strong>
+        <span>{{ t("home.team.v") }}</span>
+      </div>
     </div>
   </div>
 </template>

@@ -502,6 +502,18 @@ pub struct Action {
     pub asset: Option<Asset>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence: Option<Evidence>,
+
+    // --- user behavior (approval popup telemetry, local-only) ---
+    // Set only on the *resolution* ledger row of an approval-gated action.
+    // `Some(true)` = the user allowed an action the policy wanted to gate
+    // (override); `Some(false)` = the user confirmed the gate. `None` on
+    // every other row. Feeds User Override Rate in `actionguard stats`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_override: Option<bool>,
+    /// When the user dismissed the popup. Lets us compute human wait time
+    /// as `resolved_at − timestamp`. `None` unless `user_override` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_at: Option<String>,
 }
 
 /// v0.1 backward-compat alias. Existing imports keep compiling.
@@ -535,6 +547,8 @@ impl Action {
             enforcement: None,
             asset: None,
             evidence: None,
+            user_override: None,
+            resolved_at: None,
         }
     }
 
@@ -571,6 +585,8 @@ impl Action {
             enforcement: None,
             asset: None,
             evidence: None,
+            user_override: None,
+            resolved_at: None,
         }
     }
 
@@ -623,7 +639,7 @@ fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-fn now_str() -> String {
+pub fn now_str() -> String {
     chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
@@ -790,6 +806,16 @@ pub struct SessionSummary {
     /// backward compat with sessions that predate the mode field.
     #[serde(default)]
     pub mode: SessionMode,
+    /// v0.2 — approval popups that fired (interruptions). Every gated action
+    /// shows one popup; this is the denominator of User Override Rate.
+    /// Old sessions load with zeros.
+    #[serde(default)]
+    pub popups: u32,
+    /// v0.2 — times the user allowed a gated action (override). This is the
+    /// numerator of User Override Rate. A high rate means the policy is too
+    /// sensitive or the popup is doing the user's thinking for them.
+    #[serde(default)]
+    pub overrides: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -914,12 +940,23 @@ pub struct MatchSpec {
     pub regex: Option<String>,
 }
 
+/// Where a rule came from — this drives both display and policy precedence.
+///
+/// Precedence (highest first): `User` → `Project` → `Builtin`.
+///
+/// Security invariant: the protected object (an agent) must not be able to
+/// decide its own protection boundary. Project rules are therefore only
+/// allowed to make the boundary **stricter** (deny/ask), never weaker —
+/// enforced at load time once Project policy lands (v0.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PolicySource {
     #[default]
     Builtin,
     User,
+    /// Project/team policy (`.actionguard.yml` in the workspace root).
+    /// Reserved for v0.3 — only allowed to tighten, never to relax.
+    Project,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1006,4 +1043,56 @@ pub struct ApprovalResolution {
     pub decision: Decision,
     #[serde(default)]
     pub learn_rule: Option<Rule>,
+}
+
+// ===========================================================================
+// Tests — v0.2 user-behavior telemetry fields
+// ===========================================================================
+
+#[cfg(test)]
+mod telemetry_tests {
+    use super::*;
+
+    #[test]
+    fn old_ledger_rows_deserialize_without_telemetry_fields() {
+        // Pre-v0.2 ledger rows have no user_override / resolved_at. They must
+        // deserialize as None, and re-serializing must NOT emit the fields
+        // (keeps old rows byte-stable when re-written).
+        let old_row = r#"{"id":"x","timestamp":"2026-01-01 00:00:00","action":"modify","sensitive":false,"outside":false}"#;
+        let a: Action = serde_json::from_str(old_row).unwrap();
+        assert_eq!(a.user_override, None);
+        assert_eq!(a.resolved_at, None);
+        let out = serde_json::to_string(&a).unwrap();
+        assert!(
+            !out.contains("user_override") && !out.contains("resolved_at"),
+            "None fields must be skipped: {out}"
+        );
+    }
+
+    #[test]
+    fn resolution_row_roundtrips_override_fields() {
+        // A resolution row (the row the bridge appends after the popup) must
+        // carry user_override + resolved_at through serialize/deserialize.
+        let mut a = Action::new_shell("npm install axios".to_string(), None, None);
+        a.user_override = Some(true);
+        a.resolved_at = Some(now_str());
+        let out = serde_json::to_string(&a).unwrap();
+        let back: Action = serde_json::from_str(&out).unwrap();
+        assert_eq!(back.user_override, Some(true));
+        assert!(back.resolved_at.is_some());
+    }
+
+    #[test]
+    fn confirmed_gate_and_override_are_distinct() {
+        // `Some(false)` = user confirmed the gate (agreed with the popup).
+        // `Some(true)` = user overrode it. These are the two sides of
+        // User Override Rate.
+        let mut confirmed = Action::new_shell("git push".to_string(), None, None);
+        confirmed.user_override = Some(false);
+        assert!(!confirmed.user_override.unwrap());
+
+        let mut overrode = Action::new_shell("git push".to_string(), None, None);
+        overrode.user_override = Some(true);
+        assert!(overrode.user_override.unwrap());
+    }
 }
