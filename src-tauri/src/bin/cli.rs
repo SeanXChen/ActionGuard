@@ -1125,6 +1125,13 @@ fn stats(export: Option<&std::path::Path>) {
     let mut total_blocked = 0u32;
     let mut enforcement = EnforcementCounts::default();
     let mut risk_counts = (0u32, 0u32, 0u32, 0u32); // low, medium, high, critical
+    // v0.2 — user behavior: popups fired vs. user overrides. This is the
+    // product-validation signal (User Override Rate), not vanity telemetry.
+    let mut total_popups = 0u32;
+    let mut total_overrides = 0u32;
+    // v0.2 — per-action rows, collected only when exporting, so local
+    // analysis can compute wait time etc. without any network.
+    let mut ledger: Vec<actionguard_lib::models::Action> = Vec::new();
     for s in &sessions {
         total_detected += s.actions_protected;
         total_blocked += s.actions_blocked;
@@ -1136,6 +1143,14 @@ fn stats(export: Option<&std::path::Path>) {
         risk_counts.1 += s.risk_counts.medium;
         risk_counts.2 += s.risk_counts.high;
         risk_counts.3 += s.risk_counts.critical;
+        total_popups += s.popups;
+        total_overrides += s.overrides;
+        if export.is_some() {
+            ledger.extend(storage::load_ledger(
+                &s.id,
+                &actionguard_lib::storage::LedgerFilter::default(),
+            ));
+        }
     }
     println!("Actions Detected:   {total_detected}  (recorded across all boundaries)");
     println!("Actions Blocked:    {total_blocked}  (deny decisions)");
@@ -1152,6 +1167,18 @@ fn stats(export: Option<&std::path::Path>) {
     println!("  MEDIUM:    {}", risk_counts.1);
     println!("  HIGH:      {}", risk_counts.2);
     println!("  CRITICAL:  {}", risk_counts.3);
+    println!();
+    println!("User Behavior (validation signal — is the boundary trusted?):");
+    println!("  Popups (interruptions):  {total_popups}  (approval gates fired)");
+    println!("  User Overrides:           {total_overrides}  (allowed a gated action)");
+    let override_rate = if total_popups > 0 {
+        total_overrides as f64 / total_popups as f64 * 100.0
+    } else {
+        0.0
+    };
+    println!("  Override Rate:            {override_rate:.1}%  (overrides / popups)");
+    println!("    A high rate means the policy is too sensitive or the popup is");
+    println!("    doing the user's thinking for them — not that users are wrong.");
 
     if let Some(path) = export {
         #[derive(serde::Serialize)]
@@ -1169,6 +1196,13 @@ fn stats(export: Option<&std::path::Path>) {
             total_blocked: u32,
             enforcement: &'a EnforcementCounts,
             risk: RiskBreakdown,
+            // v0.2 — product-validation metrics
+            popups: u32,
+            overrides: u32,
+            override_rate: f64,
+            // v0.2 — per-action rows (decision × risk × user_override) so the
+            // owner can analyze locally without any telemetry backend.
+            actions: &'a [actionguard_lib::models::Action],
             sessions: &'a [actionguard_lib::models::SessionSummary],
         }
         let report = Report {
@@ -1186,6 +1220,10 @@ fn stats(export: Option<&std::path::Path>) {
                 high: risk_counts.2,
                 critical: risk_counts.3,
             },
+            popups: total_popups,
+            overrides: total_overrides,
+            override_rate,
+            actions: &ledger,
             sessions: &sessions,
         };
         let json = serde_json::to_string_pretty(&report).unwrap_or_else(|e| {

@@ -45,6 +45,8 @@ export type DictKey =
   | "home.whatFlagged.v"
   | "home.undo.k"
   | "home.undo.v"
+  | "home.team.k"
+  | "home.team.v"
   | "home.para.title"
   | "home.para.subtitle"
   | "home.para.desc"
@@ -258,6 +260,9 @@ const en: Dict = {
   "home.undo.k": "Undo",
   "home.undo.v":
     "Restores files to the local snapshot taken when the session started. Undo only covers file changes inside the protected workspace.",
+  "home.team.k": "Team deployment",
+  "home.team.v":
+    "Need ActionGuard for a team? We're exploring enterprise deployment options — see the README.",
   "home.para.title": "Protected Action Rate",
   "home.para.subtitle": "The metric that matters more than stars.",
   "home.para.desc":
@@ -476,6 +481,8 @@ const zh: Dict = {
     "一次修改超过 20 个文件 · 超过 3 个删除 · 敏感文件（.env、*.pem、*.key、credentials.*、id_rsa …）· 受保护工作空间外的路径。",
   "home.undo.k": "撤销",
   "home.undo.v": "将会话开始时的本地快照回滚到工作空间。撤销仅覆盖受保护工作空间内的文件变更。",
+  "home.team.k": "团队部署",
+  "home.team.v": "团队需要 ActionGuard？我们正在探索企业部署方案——详见 README。",
   "home.para.title": "拦截率 Protected Action Rate",
   "home.para.subtitle": "比 Star 更有价值的指标。",
   "home.para.desc":

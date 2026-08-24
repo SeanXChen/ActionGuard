@@ -49,6 +49,12 @@ pub struct ActiveSession {
     /// v0.2 Mode A/B: Observe = record only, Protected = block high-risk.
     /// Set at session start, immutable for the session lifetime.
     pub mode: crate::models::SessionMode,
+    /// v0.2 — approval popups fired (interruptions). Denominator of User
+    /// Override Rate.
+    pub popups: u32,
+    /// v0.2 — times the user allowed a gated action. Numerator of User
+    /// Override Rate.
+    pub overrides: u32,
 }
 
 pub struct AppState {
@@ -446,6 +452,9 @@ fn finalize_session(
             // v0.3 — enforcement outcome split
             enforcement_counts: s.enforcement_counts,
             mode: s.mode,
+            // v0.2 — user behavior (approval popups / overrides)
+            popups: s.popups,
+            overrides: s.overrides,
         };
         (summary, s.actions.clone(), s.id.clone())
     };
@@ -607,6 +616,8 @@ pub async fn start_session(
             bridge: Some(bridge_handle),
             shell: shell.to_string(),
             mode: mode.unwrap_or_default(),
+            popups: 0,
+            overrides: 0,
         });
     }
 
@@ -805,6 +816,9 @@ pub struct ActiveStatsPayload {
     /// v0.3 — enforcement outcome split (Detection ≠ Protection).
     pub enforcement_counts: EnforcementCounts,
     pub awaiting_review: bool,
+    /// v0.2 — approval popups fired / user overrides (User Override Rate).
+    pub popups: u32,
+    pub overrides: u32,
 }
 
 #[tauri::command]
@@ -827,6 +841,8 @@ pub fn get_active_stats(
         actions_blocked: s.actions_blocked,
         enforcement_counts: s.enforcement_counts,
         awaiting_review: s.awaiting_review,
+        popups: s.popups,
+        overrides: s.overrides,
     }))
 }
 
@@ -1141,6 +1157,8 @@ mod tests {
             bridge: None,
             shell: "test".into(),
             mode: crate::models::SessionMode::Protected,
+            popups: 0,
+            overrides: 0,
         });
         let mut action = Action::new_shell("rm -rf /tmp/x".to_string(), None, None);
         action.decision = Some(Decision::Deny);

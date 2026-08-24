@@ -339,6 +339,14 @@ fn handle_preexec(
             cfg_timeout,
         );
         let rx = state.approvals.request(req.clone());
+        // v0.2 — popup telemetry: one interruption per gated action. This is
+        // the denominator of User Override Rate (`actionguard stats`).
+        {
+            let mut guard = state.session.lock().unwrap();
+            if let Some(s) = guard.as_mut() {
+                s.popups += 1;
+            }
+        }
         // Notify the frontend. The ApprovalModal subscribes to this event.
         let _ = app.emit("actionguard://approval/request", req);
 
@@ -390,6 +398,20 @@ fn handle_preexec(
     } else {
         // The bridge already pushed the pending row above. Re-emit so the
         // final state shows up. We can't dedupe — append the resolution row.
+        //
+        // v0.2 — user behavior telemetry (local-only): stamp whether the user
+        // overrode the gate, and when the popup was dismissed. This is the
+        // data behind User Override Rate in `actionguard stats`.
+        let is_override = matches!(final_decision, Decision::Allow)
+            && matches!(initial_decision, Decision::Ask);
+        action.user_override = Some(is_override);
+        action.resolved_at = Some(crate::models::now_str());
+        if is_override {
+            let mut guard = state.session.lock().unwrap();
+            if let Some(s) = guard.as_mut() {
+                s.overrides += 1;
+            }
+        }
         crate::commands::push_action(&state, action.clone());
     }
 

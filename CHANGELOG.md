@@ -233,6 +233,19 @@ of agent issued them.
 - **`actionguard stats --export <path>`。** 将聚合报告（detected / blocked /
   enforcement 拆分 / risk breakdown / 每个会话摘要）导出为本地 JSON，用于
   无遥测的用户验证。
+- **本地用户行为埋点（User Override Rate）——验证"边界是否被信任"。**
+  `Action` ledger 行新增 `user_override` / `resolved_at`：bridge 在弹窗决策后
+  把"用户是否否决了 ActionGuard 的判断"落盘（`Some(true)` = 用户放行了被
+  拦截的动作，`Some(false)` = 用户认同）。`SessionSummary` 新增 `popups`
+  （弹窗/打断次数）与 `overrides`（否决次数）；`actionguard stats` 输出
+  **Override Rate**（overrides ÷ popups，高比例 = 策略过敏感或弹窗设计失败，
+  不是用户不懂安全）。`stats --export` 额外导出每行 Action 明细，可本地
+  计算等待时长等——全程无遥测，数据文件在用户机器上。
+- **企业部署暗示（克制版）。** README 新增 "Using ActionGuard in your
+  company?" 小节（探索 team deployment / enterprise use cases），GUI 主页
+  新增一行 "Team deployment" 提示。目的是验证一个假设：有没有人把
+  ActionGuard 从"GitHub 上的工具"理解成"可以部署到公司的安全基础设施"。
+  这个信号比几十个 Star 值钱。
 
 ## [0.2.1] — 2026-08-19
 

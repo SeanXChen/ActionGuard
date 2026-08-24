@@ -9,6 +9,7 @@
 > - [Bug report form](../.github/ISSUE_TEMPLATE/bug_report.yml) — install/protection failures
 > - Community boundary-verification PRs (see `BOUNDARIES.md`)
 > - Direct user interviews
+> - `actionguard stats --export <path>` — **local** user-behavior telemetry: every approval popup (`popups`) and every time the user allowed a gated action (`overrides`). No network — the report is a JSON file on the user's machine. This is the only quantitative "is the boundary trusted?" signal we have.
 
 ---
 
@@ -39,6 +40,9 @@ If ① and ② stay empty, do not build more features — find out why people dr
 | Community boundary PRs | _n_ | validates ecosystem | Pull requests |
 | Paid / enterprise inquiries | _n_ | business signal | Discussions, email |
 | Install / protection failures | _n_ | **must track** | Bug report form |
+| User Override Rate (`stats --export`) | _n_ | **core** — high rate ⇒ policy too sensitive or popup UX is failing | Local telemetry |
+| Popups per session (`stats --export`) | _n_ | low better (autonomy preserved) | Local telemetry |
+| Overrides per session (`stats --export`) | _n_ | **core** — numerator of Override Rate | Local telemetry |
 
 ---
 
@@ -108,3 +112,4 @@ Distinguish between:
 | Date | Change |
 |------|--------|
 | 2026-08-23 | Created for the v0.2 validation phase. No user data yet — first real signal is the goal. |
+| 2026-08-24 | v0.2.1 telemetry: `stats --export` now records approval popups / user overrides (User Override Rate), plus per-action ledger rows for local analysis. README + GUI added a restrained enterprise-deployment signal ("Using ActionGuard in your company?"). |

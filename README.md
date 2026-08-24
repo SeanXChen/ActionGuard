@@ -62,6 +62,7 @@ It does not watch a brand. It watches the **boundary** — the point where an au
 - [How it works](#how-it-works)
 - [Known limitations](#known-limitations)
 - [Give feedback](#give-feedback)
+- [Using ActionGuard in your company?](#using-actionguard-in-your-company)
 - [Contributing](#contributing)
 
 ---
@@ -323,6 +324,14 @@ ActionGuard is local-first: **no telemetry** is built into the product. Instead,
 - 💬 Prefer open conversation? [Start a discussion](https://github.com/SeanXChen/ActionGuard/discussions).
 
 We track these signals in [docs/USER_VALIDATION.md](./docs/USER_VALIDATION.md).
+
+---
+
+## Using ActionGuard in your company?
+
+ActionGuard is local-first, but we're actively exploring **team deployment and enterprise use cases** — shared policy, audit-friendly exports, managed rule packs.
+
+If *"can this work for a team?"* is a question you're asking, we'd like to hear it: [start a discussion](https://github.com/SeanXChen/ActionGuard/discussions) or [file an enterprise-inquiry issue](https://github.com/SeanXChen/ActionGuard/issues/new). That single signal tells us more than a dozen stars.
 
 ---
 
