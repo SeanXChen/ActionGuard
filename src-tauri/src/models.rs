@@ -914,12 +914,23 @@ pub struct MatchSpec {
     pub regex: Option<String>,
 }
 
+/// Where a rule came from — this drives both display and policy precedence.
+///
+/// Precedence (highest first): `User` → `Project` → `Builtin`.
+///
+/// Security invariant: the protected object (an agent) must not be able to
+/// decide its own protection boundary. Project rules are therefore only
+/// allowed to make the boundary **stricter** (deny/ask), never weaker —
+/// enforced at load time once Project policy lands (v0.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PolicySource {
     #[default]
     Builtin,
     User,
+    /// Project/team policy (`.actionguard.yml` in the workspace root).
+    /// Reserved for v0.3 — only allowed to tighten, never to relax.
+    Project,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

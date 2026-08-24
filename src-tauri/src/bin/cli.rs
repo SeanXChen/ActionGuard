@@ -114,7 +114,11 @@ enum Cmd {
         observe: bool,
     },
     /// Aggregate metric — actions protected across all sessions.
-    Stats,
+    Stats {
+        /// Write the full report as JSON to this path (local validation).
+        #[arg(long)]
+        export: Option<PathBuf>,
+    },
     /// Capability Tier Model — what ActionGuard can actually do on each path
     /// (L1 observe … L4 system), plus the local execution-path matrix.
     Capabilities,
@@ -204,7 +208,7 @@ fn main() {
         Some(Cmd::InitPowershell) => print_init("powershell"),
         Some(Cmd::Run { cmd }) => run(&cmd.join(" ")),
         Some(Cmd::Protect { workspace, observe }) => protect(&workspace, observe),
-        Some(Cmd::Stats) => stats(),
+        Some(Cmd::Stats { export }) => stats(export.as_deref()),
         Some(Cmd::Capabilities) => capabilities(),
         Some(Cmd::Boundary { cmd }) => match cmd {
             BoundaryCmd::List => boundary_list(),
@@ -411,6 +415,7 @@ fn policy_list() {
         let src = match r.source {
             PolicySource::Builtin => "builtin",
             PolicySource::User => "user",
+            PolicySource::Project => "project",
         };
         let action = decision_str(r.action);
         let m = match_spec_summary(&r.match_);
@@ -536,6 +541,7 @@ fn rule_search(query: &str) {
         let src = match r.source {
             PolicySource::Builtin => "builtin",
             PolicySource::User => "user",
+            PolicySource::Project => "project",
         };
         let action = decision_str(r.action);
         let m = match_spec_summary(&r.match_);
@@ -1111,7 +1117,7 @@ fn print_manual_instructions(ws: &PathBuf, mode_str: &str) {
 // stats — aggregate metric across all sessions
 // ---------------------------------------------------------------------------
 
-fn stats() {
+fn stats(export: Option<&std::path::Path>) {
     use actionguard_lib::models::EnforcementCounts;
     let sessions = storage::list_sessions().unwrap_or_default();
     let total_sessions = sessions.len();
@@ -1146,6 +1152,53 @@ fn stats() {
     println!("  MEDIUM:    {}", risk_counts.1);
     println!("  HIGH:      {}", risk_counts.2);
     println!("  CRITICAL:  {}", risk_counts.3);
+
+    if let Some(path) = export {
+        #[derive(serde::Serialize)]
+        struct RiskBreakdown {
+            low: u32,
+            medium: u32,
+            high: u32,
+            critical: u32,
+        }
+        #[derive(serde::Serialize)]
+        struct Report<'a> {
+            generated_at: String,
+            total_sessions: usize,
+            total_detected: u32,
+            total_blocked: u32,
+            enforcement: &'a EnforcementCounts,
+            risk: RiskBreakdown,
+            sessions: &'a [actionguard_lib::models::SessionSummary],
+        }
+        let report = Report {
+            generated_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs().to_string())
+                .unwrap_or_else(|_| "unknown".to_string()),
+            total_sessions,
+            total_detected,
+            total_blocked,
+            enforcement: &enforcement,
+            risk: RiskBreakdown {
+                low: risk_counts.0,
+                medium: risk_counts.1,
+                high: risk_counts.2,
+                critical: risk_counts.3,
+            },
+            sessions: &sessions,
+        };
+        let json = serde_json::to_string_pretty(&report).unwrap_or_else(|e| {
+            eprintln!("error: failed to serialize report: {e}");
+            String::new()
+        });
+        if std::fs::write(path, json).is_ok() {
+            println!();
+            println!("Report written to {}", path.display());
+        } else {
+            eprintln!("error: could not write report to {}", path.display());
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

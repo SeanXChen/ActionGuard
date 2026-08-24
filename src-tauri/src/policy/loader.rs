@@ -58,6 +58,13 @@ fn parse(name: &str, body: &str) -> PolicyFile {
 /// Called once at startup and again when the user edits
 /// `policies.user.yml`. The result is wrapped in `Arc` for cheap cloning
 /// into the bridge thread.
+///
+/// Precedence: User → Project → Builtin.
+///
+/// Security invariant: only User may relax the boundary. Project rules
+/// (v0.3) will be inserted here, between User and Builtin, and their
+/// `action` clamped to Deny/Ask at load time — a Project rule can make
+/// ActionGuard stricter, never weaker.
 pub fn load_policy_set() -> PolicySet {
     let mut rules: Vec<Rule> = Vec::new();
 
