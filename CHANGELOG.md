@@ -246,6 +246,28 @@ of agent issued them.
   新增一行 "Team deployment" 提示。目的是验证一个假设：有没有人把
   ActionGuard 从"GitHub 上的工具"理解成"可以部署到公司的安全基础设施"。
   这个信号比几十个 Star 值钱。
+- **边界发现 → 规则固化的研发基础设施（流水线）。** 不再"每天手写 YAML"：
+  - `docs/FACTS_SCHEMA.md`：事实层语言定稿。Fact 字段 ↔ 实现状态 ↔ 规则
+    `match` 映射（`category`/`command`/`args_*`/`regex`/`path`），原则：
+    规则面向 Facts 写，不面向原始字符串。
+  - `docs/BOUNDARY_BACKLOG.md`：Boundary Backlog。规则分三层（Tier 0 绝对边界 /
+    Tier 1 高风险默认防护 / Tier 2 环境特定策略）；68 条内置规则全量盘点；
+    候选边界漏斗（B001–B015）+ 每周节奏（2–5 个候选）。发现新边界只做一件事：
+    往 Backlog 加一行。
+  - **Golden 回归套件（`tests/golden/`，31 用例）。** 每条规则的正/负/边界案例，
+    走真实 pipeline（`classify_shell_command` → `decide`），断言
+    decision + matched_rule + risk。**首跑即抓住 2 个真实规则问题**：
+    `git branch -d` 被 `-D` 规则遮蔽（`args_contains` 大小写折叠——`-d` 误配
+    `["-D"]`，已改为大小写敏感的 `regex`）；`sudo rm -rf /` 实际由 `deny-sudo`
+    兜底（首 token 为 sudo，`deny-rm-rf-root` 的 `^rm` 不适用——结果仍为 Deny，
+    不弱化）。`cat .env.production` 命中 `confirm-cat-env`（`-prod`/`-local` 为
+    死规则）与 `cat ~/.aws/credentials` 无 confirm-cat-* 覆盖（读凭证缺口）如实
+    锁定为 Backlog B013 / B014，修复时同步更新 Golden。
+  - **贡献机制重定义：奖励 Boundary Discovery，不奖励写 YAML。** 三层贡献
+    （Tier 1 报告免 YAML / Tier 2 复现案例 / Tier 3 Policy+Test）；新增
+    `boundary_report` issue 模板（"Found a dangerous agent action that
+    ActionGuard doesn't handle?"）；规则贡献强制要求 Golden Test——没有测试的
+    规则 PR 不合并。
 
 ## [0.2.1] — 2026-08-19
 

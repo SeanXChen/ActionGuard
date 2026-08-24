@@ -1,0 +1,49 @@
+name: Boundary Report — discovered a gap
+description: Found a dangerous AI-powered automation action that ActionGuard doesn't cover? File it here. No YAML required.
+title: "[boundary] <what ActionGuard didn't stop>"
+labels: ["boundary-report", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You're helping ActionGuard discover a boundary it hasn't modeled.
+        **You don't need to write YAML or code** — we reward boundary discovery,
+        not rule writing.
+        First check [docs/BOUNDARY_BACKLOG.md](https://github.com/SeanXChen/ActionGuard/blob/main/docs/BOUNDARY_BACKLOG.md)
+        — is it already tracked?
+  - type: input
+    id: action
+    attributes:
+      label: The action / command
+      description: What did the automation do or try to do? (e.g. `git push --force origin main`)
+    validations:
+      required: true
+  - type: input
+    id: tool
+    attributes:
+      label: Automation tool
+      description: Which AI-powered automation was running? (CodeBuddy, Claude Code, Cursor, a script, ...)
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this dangerous?
+      description: What could go wrong if this action runs unguarded?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should ActionGuard do?
+      description: e.g. "block" / "ask before allowing". Your judgement is the signal we need.
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS + shell (e.g. Windows 11 + PowerShell 7)
+  - type: checkboxes
+    id: repro
+    attributes:
+      label: Can you reproduce it? (optional — raises your credit tier)
+      options:
+        - label: I can provide a reproduction case (action, environment, expected, actual)
+        - label: I'm willing to test a candidate policy and report back

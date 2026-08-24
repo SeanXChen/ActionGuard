@@ -105,7 +105,10 @@ rules:
     match:
       category: git
       command: branch
-      args_contains: ["-D"]
+      # args_contains is case-folded by the matcher, so ["-D"] also matches
+      # `-d` (safe delete). A case-sensitive regex distinguishes them —
+      # verified by tests/golden/git.rs (branch_delete_matrix).
+      regex: "-D(\\s|$)"
     action: ask
     risk: medium
     reason: "Force branch deletion"
@@ -114,7 +117,7 @@ rules:
     match:
       category: git
       command: branch
-      args_contains: ["-d"]
+      regex: "-d(\\s|$)"
     action: ask
     risk: low
     reason: "Branch deletion"

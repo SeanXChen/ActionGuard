@@ -326,9 +326,9 @@ ActionGuard 是本地优先的：**产品内没有任何遥测**。作为替代�
 
 ## 贡献
 
-欢迎贡献——尤其是**边界验证报告**（本项目的核心资产）。见 [CONTRIBUTING.md](./docs/CONTRIBUTING.md)（报告模板、规则格式、代码规范、安全漏洞报告）。
+欢迎贡献——尤其是**边界发现**（一个 ActionGuard 还没处理、但确实危险的 AI 自动化行为——不需要写 YAML）和**边界验证报告**（本项目的核心资产）。见 [CONTRIBUTING.md](./docs/CONTRIBUTING.md)（报告模板、规则格式、代码规范、安全漏洞报告）。
 
-另见：[SECURITY_MODEL.md](./SECURITY_MODEL.md) · [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md) · [BOUNDARIES.md](./BOUNDARIES.md) · [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+另见：[SECURITY_MODEL.md](./SECURITY_MODEL.md) · [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md) · [BOUNDARIES.md](./BOUNDARIES.md) · [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) · [docs/FACTS_SCHEMA.md](./docs/FACTS_SCHEMA.md) · [docs/BOUNDARY_BACKLOG.md](./docs/BOUNDARY_BACKLOG.md)
 
 ---
 

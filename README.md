@@ -337,9 +337,9 @@ If *"can this work for a team?"* is a question you're asking, we'd like to hear 
 
 ## Contributing
 
-Contributions are welcome — especially **boundary verification reports** (the asset this project runs on). See [CONTRIBUTING.md](./CONTRIBUTING.md) for report templates, rule format, code conventions, and security reporting. (中文版: [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md))
+Contributions are welcome — especially **boundary discovery** (a dangerous agent action ActionGuard doesn't handle yet — no YAML required) and **boundary verification reports** (the asset this project runs on). See [CONTRIBUTING.md](./CONTRIBUTING.md) for report templates, rule format, code conventions, and security reporting. (中文版: [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md))
 
-See also: [SECURITY_MODEL.md](./SECURITY_MODEL.md) · [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md) · [BOUNDARIES.md](./BOUNDARIES.md) · [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+See also: [SECURITY_MODEL.md](./SECURITY_MODEL.md) · [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md) · [BOUNDARIES.md](./BOUNDARIES.md) · [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) · [docs/FACTS_SCHEMA.md](./docs/FACTS_SCHEMA.md) · [docs/BOUNDARY_BACKLOG.md](./docs/BOUNDARY_BACKLOG.md)
 
 ---
 

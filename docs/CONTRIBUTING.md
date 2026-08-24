@@ -9,6 +9,7 @@
 ## 📋 目录
 
 - [贡献类型](#贡献类型)
+- [边界发现贡献（最高价值）](#边界发现贡献最高价值)
 - [Boundary 验证报告](#boundary-验证报告)
 - [规则贡献](#规则贡献)
 - [代码贡献](#代码贡献)
@@ -21,10 +22,34 @@
 
 | 类型 | 说明 | 起始文件 |
 |------|------|----------|
+| **边界发现** | **发现 ActionGuard 未覆盖的危险行为。我们奖励"发现"，不奖励"写规则"。** | 无需 YAML，见 [BOUNDARY_BACKLOG](../docs/BOUNDARY_BACKLOG.md) |
 | **验证报告** | 对某个 AI 工具执行 ActionGuard Boundary Test | 见下方 PR 模板 |
-| **规则** | 新的 YAML 安全规则或规则包 | `src-tauri/rules/` 或社区仓库 |
+| **规则** | 新的 YAML 安全规则（必须带 Golden Test） | `src-tauri/rules/` + `src-tauri/tests/golden/` |
 | **代码** | Rust 后端 / Vue 前端 / CLI 功能 | 先开 Issue 讨论 |
 | **文档** | README、架构文档、翻译 | 直接提 PR |
+
+---
+
+## 边界发现贡献（最高价值）
+
+ActionGuard 的内置基线覆盖的是**我们已经知道的**。更值钱的是我们还不知道的：
+一个 AI 自动化做出的、ActionGuard 尚未建模的危险行为。
+
+**发现了一个 ActionGuard 拦不住的危险动作？直接报告即可——不需要写 YAML，不需要读代码。**
+
+我们奖励的是**边界发现**，不是规则写作。贡献分三层：
+
+| 层级 | 做什么 | 需要的能力 | 回报 |
+|------|--------|------------|------|
+| **Tier 1 · 报告** | 「ActionGuard 没拦住 X」+ 为什么危险，无需 YAML | 无 | 在边界 Backlog 中署名 |
+| **Tier 2 · 复现** | 动作 / 环境 / 预期 / 实际 / 复现步骤 | 基础 | 署名 + 关联到修复 |
+| **Tier 3 · Policy + Test** | 策略规则 + Golden Test（`src-tauri/tests/golden/`） | YAML + Rust 测试 | 署名 + 维护者审核 |
+
+每个被接受的发现都会成为 [`docs/BOUNDARY_BACKLOG.md`](../docs/BOUNDARY_BACKLOG.md)
+中的一行。**每条新规则必须带 Golden Test——没有测试的规则不合并。**
+队列由维护者策展：我们审核的是*你发现了什么*，而不是你 YAML 写得多好。
+
+使用 [Boundary Report 模板](../.github/ISSUE_TEMPLATE/boundary_report.yml) 提交。
 
 ---
 
@@ -70,38 +95,49 @@ ActionGuard 的核心资产是**诚实的验证数据**。我们不接受「声�
 
 ## 规则贡献
 
-### 规则格式
+### 规则格式（实际 Schema）
 
-所有规则使用 YAML，Schema 如下：
+规则是 YAML，**必须面向 Facts 编写**（见 [FACTS_SCHEMA.md](./FACTS_SCHEMA.md)）。
+实际格式（`src-tauri/rules/*.yml`，匹配引擎见 `src-tauri/src/policy/matcher.rs`）：
 
 ```yaml
-id: unique-rule-id          # 必填，全局唯一
-category: file|command|network|secret|irreversible  # 必填
-severity: low|medium|high|critical  # 必填
-description: "简短描述"      # 必填
-match:
-  patterns:                  # 至少一个
-    - "pattern1"
-    - "pattern2"
-  regex: "optional-regex"    # 可选
-action:
-  decision: allow|warn|ask|deny  # 必填
-  reason: "解释为什么"        # 可选
+- id: unique-rule-id          # 必填，全局唯一
+  match:
+    category: git|package|shell|file|secret   # 分类（由 classify 产出）
+    command: git               # 精确命令（Shell/Git/Package）
+    args_contains: ["-rf"]     # 全部子串必须出现（大小写折叠）
+    args_any: ["install","i"]  # 任一出现即命中
+    regex: "-D(\\s|$)"         # 作用于完整命令行（大小写敏感）
+    path: "*.env"              # 通配符路径（File 类）
+  action: allow|ask|deny       # 决策
+  risk: low|medium|high|critical
+  reason: "解释为什么"          # 必填，会展示给用户
 ```
+
+> 注意：`args_contains` 会做大小写折叠（`-d` 会被 `["-D"]` 误配）。需要区分
+> 大小写的参数请用 `regex`（如 `git branch -d` vs `-D`，见 `tests/golden/git.rs`）。
+
+### 规则必须带 Golden Test
+
+**一条规则 + 一个 Golden 用例（`src-tauri/tests/golden/<域>.rs`）成对提交。**
+Golden 断言 decision + matched_rule + risk，锁定规则行为；将来规则改动导致
+行为漂移会立刻被回归套件抓住。参考现有 `tests/golden/git.rs` / `shell.rs` /
+`secrets.rs` / `package.rs`。
 
 ### 规则存储位置
 
 | 来源 | 路径 | 说明 |
 |------|------|------|
-| 内置 | `src-tauri/rules/*.yml` | 随引擎发布 |
-| 用户 | `~/.actionguard/policy/` | 用户自定义 |
+| 内置 | `src-tauri/rules/*.yml` | 随引擎发布，分域组织（git/shell/secrets/node/python） |
+| 用户 | `~/.actionguard/policy/` | 用户自定义（Tier 2 环境特定策略） |
 | 社区 | 独立仓库（计划中） | `actionguard rule install` 安装 |
 
 ### 提交规则
 
-1. 在 `src-tauri/rules/` 新增 `.yml` 文件，或准备独立规则包。
-2. 运行 `actionguard policy-check <测试命令>` 验证规则生效。
-3. 提交 PR，包含规则的测试用例和预期决策。
+1. 在 `src-tauri/rules/` 的对应域文件新增规则（新域才新建文件）。
+2. 在 `src-tauri/tests/golden/` 增加对应正/负/边界用例。
+3. 运行 `cargo test --test golden` 验证全部绿。
+4. 提交 PR；没有 Golden Test 的规则 PR 不合并。
 
 ---
 
