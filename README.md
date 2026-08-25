@@ -322,7 +322,7 @@ We track these signals in [docs/USER_VALIDATION.md](./docs/USER_VALIDATION.md).
 
 ActionGuard is local-first, but we're actively exploring **team deployment and enterprise use cases** — shared policy, audit-friendly exports, managed rule packs.
 
-If *"can this work for a team?"* is a question you're asking, we'd like to hear it: [start a discussion](https://github.com/SeanXChen/ActionGuard/discussions) or [file an enterprise-inquiry issue](https://github.com/SeanXChen/ActionGuard/issues/new). That single signal tells us more than a dozen stars.
+If *"can this work for a team?"* is a question you're asking, we'd like to hear it: [start a discussion](https://github.com/SeanXChen/ActionGuard/discussions) or [file an enterprise-inquiry issue](https://github.com/SeanXChen/ActionGuard/issues/new).
 
 ---
 
