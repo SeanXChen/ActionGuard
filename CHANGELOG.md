@@ -14,6 +14,29 @@ of agent issued them.
 
 ### Changed
 
+- **README reordered around user-facing narrative.** The first screen now
+  answers the five questions a new visitor asks in five seconds: *what is it,
+  why do I need it, how does it decide, is it real, can I try it now.* New
+  sections: **Who is it for?** (developers → AI power users), **Why not just
+  use the automation's built-in permissions?** (*Sandbox controls where it can
+  go. ActionGuard controls what it can do there.*), and the **Capability ≠
+  Consequence** framing. The protection matrix is condensed to a *Verified
+  today* table up front (with honest Research / Observe-only labels); the full
+  per-boundary matrix, dates, and platform status stay in `BOUNDARIES.md`.
+  Known limitations are kept, moved below the try-it-now path. `index.html`
+  GUI title fixed from "AgentGuard" to "ActionGuard".
+- **GUI consumer entry point — "Protect this computer".** The Home view now
+  opens with a simple, product-facing card instead of the developer workflow:
+  *Protect this computer → onboarding (This computer · Recommended · the five
+  protected areas) → Protection Active* with plain-language counters
+  (allowed / reviewed / blocked) and an **Activity** panel that renders the
+  ledger as "what AI did" (human-readable lines, "Why was this blocked?" with
+  rule + decision on denied actions). The developer flow (workspace picker,
+  observe/protected modes, key metrics) moved unchanged into a collapsible
+  **Advanced** section — same core, one GUI, two information densities. No
+  new backend capability; the consumer flow calls the existing session engine
+  with the user home folder as the protected scope. CLI-start (`actionguard
+  protect <ws>`) still auto-starts the developer flow.
 - **Detection ≠ Protection is now visible in every output.** `actionguard
   stats` and `actionguard session show` split the old single "Actions
   Protected" number into **Detected** (recorded) / **Blocked** (deny
