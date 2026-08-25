@@ -59,6 +59,43 @@ export type DictKey =
   | "home.pill.neutral"
   | "home.pill.localOnly"
   | "home.protected.keyMetric"
+  | "home.consumer.badge"
+  | "home.consumer.title"
+  | "home.consumer.subtitle"
+  | "home.consumer.cta"
+  | "home.consumer.trust"
+  | "home.consumer.onboarding.title"
+  | "home.consumer.onboarding.scope.title"
+  | "home.consumer.onboarding.scope.computer"
+  | "home.consumer.onboarding.scope.computerDesc"
+  | "home.consumer.onboarding.level.title"
+  | "home.consumer.onboarding.level.recommended"
+  | "home.consumer.onboarding.level.recommendedDesc"
+  | "home.consumer.onboarding.protect.title"
+  | "home.consumer.onboarding.protect.file"
+  | "home.consumer.onboarding.protect.shell"
+  | "home.consumer.onboarding.protect.git"
+  | "home.consumer.onboarding.protect.package"
+  | "home.consumer.onboarding.protect.secret"
+  | "home.consumer.onboarding.start"
+  | "home.consumer.onboarding.back"
+  | "home.consumer.starting"
+  | "home.consumer.active.title"
+  | "home.consumer.active.subtitle"
+  | "home.consumer.active.allowed"
+  | "home.consumer.active.reviewed"
+  | "home.consumer.active.blocked"
+  | "home.consumer.active.viewActivity"
+  | "home.consumer.active.pause"
+  | "home.consumer.active.pausing"
+  | "home.consumer.activity.title"
+  | "home.consumer.activity.viewAll"
+  | "home.consumer.activity.empty"
+  | "home.consumer.activity.why"
+  | "home.consumer.activity.rule"
+  | "home.consumer.activity.decision"
+  | "home.consumer.advanced"
+  | "home.consumer.advancedHint"
   | "monitor.title"
   | "monitor.noActive"
   | "monitor.goStart"
@@ -276,6 +313,43 @@ const en: Dict = {
   "home.pill.neutral": "Automation Neutral",
   "home.pill.localOnly": "Local Only",
   "home.protected.keyMetric": "KEY METRIC",
+  "home.consumer.badge": "ActionGuard",
+  "home.consumer.title": "Let AI work on your computer safely.",
+  "home.consumer.subtitle": "Routine actions run. Dangerous ones stop or ask you first. Everything stays local.",
+  "home.consumer.cta": "Protect this computer",
+  "home.consumer.trust": "Local only · No account · Nothing uploaded",
+  "home.consumer.onboarding.title": "Set up protection",
+  "home.consumer.onboarding.scope.title": "What should ActionGuard protect?",
+  "home.consumer.onboarding.scope.computer": "This computer",
+  "home.consumer.onboarding.scope.computerDesc": "Your user files, and everything AI automation can reach on this machine.",
+  "home.consumer.onboarding.level.title": "Protection level",
+  "home.consumer.onboarding.level.recommended": "Recommended",
+  "home.consumer.onboarding.level.recommendedDesc": "Automatically allow routine actions. Ask before high-impact actions. Deny critical actions.",
+  "home.consumer.onboarding.protect.title": "ActionGuard will protect:",
+  "home.consumer.onboarding.protect.file": "Important files",
+  "home.consumer.onboarding.protect.shell": "Destructive actions",
+  "home.consumer.onboarding.protect.git": "Git changes",
+  "home.consumer.onboarding.protect.package": "Package installation",
+  "home.consumer.onboarding.protect.secret": "Passwords & API keys",
+  "home.consumer.onboarding.start": "Start Protection",
+  "home.consumer.onboarding.back": "Back",
+  "home.consumer.starting": "Starting…",
+  "home.consumer.active.title": "Protection Active",
+  "home.consumer.active.subtitle": "Your computer is protected",
+  "home.consumer.active.allowed": "actions allowed",
+  "home.consumer.active.reviewed": "actions reviewed",
+  "home.consumer.active.blocked": "actions blocked",
+  "home.consumer.active.viewActivity": "View activity",
+  "home.consumer.active.pause": "Pause",
+  "home.consumer.active.pausing": "Pausing…",
+  "home.consumer.activity.title": "What AI did",
+  "home.consumer.activity.viewAll": "View all",
+  "home.consumer.activity.empty": "No activity yet. Actions will appear here as AI automation works.",
+  "home.consumer.activity.why": "Why was this blocked?",
+  "home.consumer.activity.rule": "Rule",
+  "home.consumer.activity.decision": "Decision",
+  "home.consumer.advanced": "Advanced",
+  "home.consumer.advancedHint": "Choose a workspace and a protection mode.",
   "monitor.title": "No active session.",
   "monitor.noActive": "No active session.",
   "monitor.goStart": "Start a session",
@@ -496,6 +570,43 @@ const zh: Dict = {
   "home.pill.neutral": "自动化无关",
   "home.pill.localOnly": "仅本地",
   "home.protected.keyMetric": "关键指标",
+  "home.consumer.badge": "ActionGuard",
+  "home.consumer.title": "让 AI 安全地在你的电脑上干活。",
+  "home.consumer.subtitle": "常规动作照常执行。危险动作先停下问你要不要。一切都在本地。",
+  "home.consumer.cta": "保护这台电脑",
+  "home.consumer.trust": "仅本地 · 无需账号 · 不上传任何数据",
+  "home.consumer.onboarding.title": "设置保护",
+  "home.consumer.onboarding.scope.title": "ActionGuard 保护什么？",
+  "home.consumer.onboarding.scope.computer": "这台电脑",
+  "home.consumer.onboarding.scope.computerDesc": "你的用户文件，以及 AI 自动化在这台机器上能碰到的所有东西。",
+  "home.consumer.onboarding.level.title": "保护级别",
+  "home.consumer.onboarding.level.recommended": "推荐",
+  "home.consumer.onboarding.level.recommendedDesc": "常规动作自动放行。高影响动作先询问。致命动作直接拒绝。",
+  "home.consumer.onboarding.protect.title": "ActionGuard 将保护：",
+  "home.consumer.onboarding.protect.file": "重要文件",
+  "home.consumer.onboarding.protect.shell": "破坏性动作",
+  "home.consumer.onboarding.protect.git": "Git 变更",
+  "home.consumer.onboarding.protect.package": "软件安装",
+  "home.consumer.onboarding.protect.secret": "密码与 API 密钥",
+  "home.consumer.onboarding.start": "开始保护",
+  "home.consumer.onboarding.back": "返回",
+  "home.consumer.starting": "启动中…",
+  "home.consumer.active.title": "保护已开启",
+  "home.consumer.active.subtitle": "你的电脑正受到保护",
+  "home.consumer.active.allowed": "个动作已放行",
+  "home.consumer.active.reviewed": "个动作已询问",
+  "home.consumer.active.blocked": "个动作已被阻止",
+  "home.consumer.active.viewActivity": "查看活动",
+  "home.consumer.active.pause": "暂停",
+  "home.consumer.active.pausing": "暂停中…",
+  "home.consumer.activity.title": "AI 做了什么",
+  "home.consumer.activity.viewAll": "查看全部",
+  "home.consumer.activity.empty": "暂无活动。AI 自动化开始工作后，动作会显示在这里。",
+  "home.consumer.activity.why": "为什么被阻止？",
+  "home.consumer.activity.rule": "规则",
+  "home.consumer.activity.decision": "决策",
+  "home.consumer.advanced": "高级",
+  "home.consumer.advancedHint": "选择工作空间与保护模式。",
   "monitor.title": "暂无活跃会话。",
   "monitor.noActive": "暂无活跃会话。",
   "monitor.goStart": "去启动一个会话",
