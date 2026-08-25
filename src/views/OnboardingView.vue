@@ -11,17 +11,19 @@ const showAdvanced = ref(false);
 const starting = ref(false);
 const error = ref<string | null>(null);
 
-async function selectWorkspace() {
-  try {
-    // @ts-ignore — plugin-dialog may not be installed in all builds
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const picked = await open({ directory: true, multiple: false });
-    if (picked && !Array.isArray(picked)) {
-      workspaceDir.value = picked;
+function selectWorkspace() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.webkitdirectory = true;
+  input.addEventListener("change", () => {
+    const f = input.files?.[0];
+    if (f) {
+      // Use webkitRelativePath to infer directory name
+      const parts = f.webkitRelativePath.split("/");
+      workspaceDir.value = parts[0] || ".";
     }
-  } catch {
-    /* ignore */
-  }
+  });
+  input.click();
 }
 
 async function protect() {
