@@ -12,6 +12,50 @@ layer across all automation sources, not "another exec approval" for any
 specific agent. We protect *actions*, we do not attempt to identify which brand
 of agent issued them.
 
+### Added
+
+- **Release pipeline (`.github/workflows/release.yml`).** Pushing a `v*` tag
+  now builds installers on Windows (MSI + NSIS), macOS (app + dmg) and Linux
+  (deb + AppImage), attaches them to a GitHub **draft** release, and generates
+  a `SHA256SUMS` file from the exact released assets. First step toward a
+  real `winget install` path.
+- **winget packaging materials (`scripts/winget/` + `docs/WINGET.md`).**
+  Manifest templates for the official winget-pkgs repository plus the release
+  → checksum → submit checklist. Deliberately no `curl | sh`: ActionGuard is a
+  security product and the install path is always Download → Verify → Install.
+- **README "Can you break ActionGuard?" section.** Turns the existing
+  Verified / Observe-only matrix into a security-tester hook: report a *new*
+  undocumented bypass privately, get credited (`SECURITY.md`).
+
+### Changed
+
+- **GUI onboarding explains "Recommended Protection" in behavior, not
+  abstraction.** The protection step now states the three-way default in
+  plain language: *routine AI work continues · high-impact actions ask ·
+  critical actions are blocked* — instead of a vague sensitivity level.
+- **README install flow.** "Download the binary" is now an explicit
+  Download → Verify (SHA256SUMS) → Install sequence, matching the GUI's
+  no-commands entry point.
+
+### Changed
+
+- **GUI completely restructured: Home → Dashboard + Onboarding separation.**
+  The previous "configuration-first" Home page is now split into two:
+  - **Onboarding** (`OnboardingView.vue`): a full-screen, one-click first-run
+    experience (`Protect this computer`) with optional Advanced settings.
+    Appears only on first launch; completion state persisted in localStorage.
+  - **Dashboard** (`HomeView.vue`): a status-first home page showing
+    Protection Active/Inactive, quick stats (Total / Allowed / Asked /
+    Blocked), Recent Activity, Review Queue, and Protected Boundaries.
+    Advanced settings are collapsed behind an "Advanced settings ▸" toggle.
+- **App layout switched to sidebar navigation.** Left sidebar with
+  Dashboard / Activity / Review / Live nav items plus protection status
+  indicator. Top header bar with page title, language switcher, and window
+  controls. Bottom footer removed to maximize content area.
+- **Visual hierarchy aligned with social-preview design direction.**
+  Green for active/protection, amber for attention/asked, red for blocked,
+  deeper background with lighter cards for clear depth separation.
+
 ### Changed
 
 - **README reordered around user-facing narrative.** The first screen now

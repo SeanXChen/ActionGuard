@@ -60,9 +60,12 @@ export type DictKey =
   | "home.pill.localOnly"
   | "home.protected.keyMetric"
   | "home.consumer.badge"
+  | "home.consumer.tagline"
   | "home.consumer.title"
   | "home.consumer.subtitle"
   | "home.consumer.cta"
+  | "home.consumer.explore"
+  | "home.consumer.supported"
   | "home.consumer.trust"
   | "home.consumer.onboarding.title"
   | "home.consumer.onboarding.scope.title"
@@ -77,6 +80,12 @@ export type DictKey =
   | "home.consumer.onboarding.protect.git"
   | "home.consumer.onboarding.protect.package"
   | "home.consumer.onboarding.protect.secret"
+  | "home.consumer.onboarding.protect.routine"
+  | "home.consumer.onboarding.protect.consequential"
+  | "home.consumer.onboarding.protect.critical"
+  | "home.consumer.onboarding.privacy.title"
+  | "home.consumer.onboarding.privacy.desc"
+  | "home.consumer.onboarding.changeLater"
   | "home.consumer.onboarding.start"
   | "home.consumer.onboarding.back"
   | "home.consumer.starting"
@@ -88,6 +97,10 @@ export type DictKey =
   | "home.consumer.active.viewActivity"
   | "home.consumer.active.pause"
   | "home.consumer.active.pausing"
+  | "home.consumer.active.pauseHint"
+  | "home.consumer.active.lastBlocked"
+  | "home.consumer.active.lastBlockedEmpty"
+  | "home.consumer.active.supported"
   | "home.consumer.activity.title"
   | "home.consumer.activity.viewAll"
   | "home.consumer.activity.empty"
@@ -229,6 +242,9 @@ export type DictKey =
   | "approval.risk"
   | "approval.reason"
   | "approval.matchedRule"
+  | "approval.technical"
+  | "approval.technical.category"
+  | "approval.technical.actionId"
   | "approval.dueIn"
   | "approval.timeout"
   | "approval.expired"
@@ -248,7 +264,71 @@ export type DictKey =
   | "win.min"
   | "win.max"
   | "win.restore"
-  | "win.close";
+  | "win.close"
+  | "nav.dashboard"
+  | "nav.activity"
+  | "brand.tag"
+  | "sidebar.protectionActive"
+  | "sidebar.protectionInactive"
+  | "onboarding.tagline"
+  | "onboarding.cta"
+  | "onboarding.starting"
+  | "onboarding.defaults"
+  | "onboarding.advanced"
+  | "onboarding.workspace"
+  | "onboarding.workspaceHint"
+  | "onboarding.privacy"
+  | "dashboard.hero.active"
+  | "dashboard.hero.inactive"
+  | "dashboard.hero.activeSub"
+  | "dashboard.hero.inactiveSub"
+  | "dashboard.meta.enforced"
+  | "dashboard.meta.stopped"
+  | "dashboard.meta.mode"
+  | "dashboard.meta.scope"
+  | "dashboard.mode.recommended"
+  | "dashboard.scope.thisComputer"
+  | "dashboard.action.viewActivity"
+  | "dashboard.action.pause"
+  | "dashboard.action.pausing"
+  | "dashboard.action.protect"
+  | "dashboard.action.starting"
+  | "dashboard.stat.total"
+  | "dashboard.stat.allowed"
+  | "dashboard.stat.asked"
+  | "dashboard.stat.blocked"
+  | "dashboard.activity.title"
+  | "dashboard.activity.viewAll"
+  | "dashboard.activity.empty"
+  | "dashboard.review.title"
+  | "dashboard.review.requestedBy"
+  | "dashboard.review.viewAll"
+  | "dashboard.boundaries.title"
+  | "dashboard.boundaries.empty"
+  | "dashboard.advanced.title"
+  | "nav.live"
+  | "home.active.confirmStop"
+  | "home.advanced.title"
+  | "home.advanced.workspace.title"
+  | "home.advanced.workspace.hint"
+  | "home.advanced.mode.title"
+  | "home.advanced.mode.interactive"
+  | "home.advanced.mode.observe"
+  | "home.advanced.mode.observeDesc"
+  | "home.advanced.rules.title"
+  | "home.advanced.rules.empty"
+  | "home.advanced.enforcement.title"
+  | "home.advanced.enforcement.empty"
+  | "home.advanced.diagnostics.title"
+  | "home.advanced.diagnostics.run"
+  | "home.advanced.diagnostics.desc"
+  | "home.metrics.title"
+  | "home.metrics.sessions"
+  | "home.metrics.flagged"
+  | "home.metrics.rate"
+  | "home.metrics.blockedActions"
+  | "onboarding.startError"
+  | "home.consumer.onboarding.changeDir";
 
 type Dict = Record<DictKey, string>;
 
@@ -314,9 +394,12 @@ const en: Dict = {
   "home.pill.localOnly": "Local Only",
   "home.protected.keyMetric": "KEY METRIC",
   "home.consumer.badge": "ActionGuard",
+  "home.consumer.tagline": "Give AI room to work. Keep control of what it can do.",
   "home.consumer.title": "Let AI work on your computer safely.",
   "home.consumer.subtitle": "Routine actions run. Dangerous ones stop or ask you first. Everything stays local.",
   "home.consumer.cta": "Protect this computer",
+  "home.consumer.explore": "Explore first",
+  "home.consumer.supported": "Protects AI actions that pass through supported boundaries.",
   "home.consumer.trust": "Local only · No account · Nothing uploaded",
   "home.consumer.onboarding.title": "Set up protection",
   "home.consumer.onboarding.scope.title": "What should ActionGuard protect?",
@@ -331,17 +414,27 @@ const en: Dict = {
   "home.consumer.onboarding.protect.git": "Git changes",
   "home.consumer.onboarding.protect.package": "Package installation",
   "home.consumer.onboarding.protect.secret": "Passwords & API keys",
+  "home.consumer.onboarding.protect.routine": "Lets routine AI work continue.",
+  "home.consumer.onboarding.protect.consequential": "Asks before high-impact actions.",
+  "home.consumer.onboarding.protect.critical": "Blocks critical actions.",
+  "home.consumer.onboarding.privacy.title": "Private by design",
+  "home.consumer.onboarding.privacy.desc": "ActionGuard runs locally. No account. No cloud telemetry. Your activity stays on this computer.",
+  "home.consumer.onboarding.changeLater": "You can change advanced policies later.",
   "home.consumer.onboarding.start": "Start Protection",
   "home.consumer.onboarding.back": "Back",
   "home.consumer.starting": "Starting…",
   "home.consumer.active.title": "Protection Active",
-  "home.consumer.active.subtitle": "Your computer is protected",
+  "home.consumer.active.subtitle": "AI can keep working. ActionGuard will step in when an action crosses your safety boundary.",
   "home.consumer.active.allowed": "actions allowed",
   "home.consumer.active.reviewed": "actions reviewed",
   "home.consumer.active.blocked": "actions blocked",
   "home.consumer.active.viewActivity": "View activity",
   "home.consumer.active.pause": "Pause",
   "home.consumer.active.pausing": "Pausing…",
+  "home.consumer.active.pauseHint": "Pausing stops enforcement until you turn it back on.",
+  "home.consumer.active.lastBlocked": "Last blocked action",
+  "home.consumer.active.lastBlockedEmpty": "No blocked actions yet.",
+  "home.consumer.active.supported": "Protects AI actions that pass through supported boundaries.",
   "home.consumer.activity.title": "What AI did",
   "home.consumer.activity.viewAll": "View all",
   "home.consumer.activity.empty": "No activity yet. Actions will appear here as AI automation works.",
@@ -489,6 +582,9 @@ const en: Dict = {
   "approval.risk": "Risk",
   "approval.reason": "Reason",
   "approval.matchedRule": "Matched rule",
+  "approval.technical": "Technical details",
+  "approval.technical.category": "Category",
+  "approval.technical.actionId": "Action ID",
   "approval.dueIn": "Auto-deny in",
   "approval.timeout": "Timed out — denied",
   "approval.expired": "Approval expired or already resolved",
@@ -510,6 +606,70 @@ const en: Dict = {
   "win.max": "Maximize",
   "win.restore": "Restore",
   "win.close": "Close",
+  "nav.dashboard": "Dashboard",
+  "nav.activity": "Activity",
+  "brand.tag": "AI Safety Boundary",
+  "sidebar.protectionActive": "Protection active",
+  "sidebar.protectionInactive": "Protection inactive",
+  "onboarding.tagline": "Protect your computer from risky AI actions.",
+  "onboarding.cta": "Protect this computer",
+  "onboarding.starting": "Starting…",
+  "onboarding.defaults": "Recommended: current directory · Recommended protection",
+  "onboarding.advanced": "Advanced settings",
+  "onboarding.workspace": "Protected workspace",
+  "onboarding.workspaceHint": "AI automation is allowed to access files inside this directory.",
+  "onboarding.privacy": "Local only · No account · No telemetry",
+  "onboarding.startError": "Failed to start protection. Make sure the ActionGuard CLI is installed and in your PATH.",
+  "home.consumer.onboarding.changeDir": "Change",
+  "dashboard.hero.active": "AI can work. You stay in control.",
+  "dashboard.hero.inactive": "Protection inactive",
+  "dashboard.hero.activeSub": "High-impact actions are reviewed before they run on your machine.",
+  "dashboard.hero.inactiveSub": "Your AI is not currently being watched. Start protection to keep it within safe boundaries.",
+  "dashboard.meta.enforced": "Enforced",
+  "dashboard.meta.stopped": "Stopped",
+  "dashboard.meta.mode": "Mode",
+  "dashboard.meta.scope": "Scope",
+  "dashboard.mode.recommended": "Recommended",
+  "dashboard.scope.thisComputer": "This Computer",
+  "dashboard.action.viewActivity": "View activity",
+  "dashboard.action.pause": "Pause protection",
+  "dashboard.action.pausing": "Pausing…",
+  "dashboard.action.protect": "Protect this computer",
+  "dashboard.action.starting": "Starting…",
+  "dashboard.stat.total": "Total actions",
+  "dashboard.stat.allowed": "Allowed",
+  "dashboard.stat.asked": "Asked",
+  "dashboard.stat.blocked": "Blocked",
+  "dashboard.activity.title": "Recent activity",
+  "dashboard.activity.viewAll": "View all",
+  "dashboard.activity.empty": "No AI activity detected yet. Actions will appear here when AI automation starts working.",
+  "dashboard.review.title": "Review queue",
+  "dashboard.review.requestedBy": "Requested by",
+  "dashboard.review.viewAll": "View all reviews",
+  "dashboard.boundaries.title": "Protected boundaries",
+  "dashboard.boundaries.empty": "No active boundaries. Start protection to see covered execution paths.",
+  "dashboard.advanced.title": "Advanced settings",
+  "nav.live": "Live",
+  "home.active.confirmStop": "Stop the current session? All actions recorded so far will remain in the ledger.",
+  "home.advanced.title": "Advanced",
+  "home.advanced.workspace.title": "Workspace",
+  "home.advanced.workspace.hint": "Only files inside this directory are monitored.",
+  "home.advanced.mode.title": "Protection Mode",
+  "home.advanced.mode.interactive": "Interactive",
+  "home.advanced.mode.observe": "Observe",
+  "home.advanced.mode.observeDesc": "Observe mode records but never blocks.",
+  "home.advanced.rules.title": "Policy Rules",
+  "home.advanced.rules.empty": "No rules loaded.",
+  "home.advanced.enforcement.title": "Enforcement",
+  "home.advanced.enforcement.empty": "No enforcement data.",
+  "home.advanced.diagnostics.title": "Diagnostics",
+  "home.advanced.diagnostics.run": "Run Diagnostics",
+  "home.advanced.diagnostics.desc": "Check boundary coverage and system status.",
+  "home.metrics.title": "Key Metrics",
+  "home.metrics.sessions": "Sessions",
+  "home.metrics.flagged": "Flagged",
+  "home.metrics.rate": "Rate",
+  "home.metrics.blockedActions": "Blocked",
 };
 
 const zh: Dict = {
@@ -571,9 +731,12 @@ const zh: Dict = {
   "home.pill.localOnly": "仅本地",
   "home.protected.keyMetric": "关键指标",
   "home.consumer.badge": "ActionGuard",
+  "home.consumer.tagline": "给 AI 干活的空间。对它能做什么，保持控制。",
   "home.consumer.title": "让 AI 安全地在你的电脑上干活。",
   "home.consumer.subtitle": "常规动作照常执行。危险动作先停下问你要不要。一切都在本地。",
   "home.consumer.cta": "保护这台电脑",
+  "home.consumer.explore": "先看看",
+  "home.consumer.supported": "保护经由受支持边界通过的 AI 动作。",
   "home.consumer.trust": "仅本地 · 无需账号 · 不上传任何数据",
   "home.consumer.onboarding.title": "设置保护",
   "home.consumer.onboarding.scope.title": "ActionGuard 保护什么？",
@@ -588,17 +751,27 @@ const zh: Dict = {
   "home.consumer.onboarding.protect.git": "Git 变更",
   "home.consumer.onboarding.protect.package": "软件安装",
   "home.consumer.onboarding.protect.secret": "密码与 API 密钥",
+  "home.consumer.onboarding.protect.routine": "让常规 AI 操作照常继续。",
+  "home.consumer.onboarding.protect.consequential": "高风险动作先问过你。",
+  "home.consumer.onboarding.protect.critical": "关键动作直接拦截。",
+  "home.consumer.onboarding.privacy.title": "设计上就保护隐私",
+  "home.consumer.onboarding.privacy.desc": "ActionGuard 完全本地运行。无账号。无云端遥测。你的活动只留在这台电脑上。",
+  "home.consumer.onboarding.changeLater": "高级策略以后可以随时调整。",
   "home.consumer.onboarding.start": "开始保护",
   "home.consumer.onboarding.back": "返回",
   "home.consumer.starting": "启动中…",
   "home.consumer.active.title": "保护已开启",
-  "home.consumer.active.subtitle": "你的电脑正受到保护",
+  "home.consumer.active.subtitle": "AI 可以继续干活。当动作越过你的安全边界时，ActionGuard 会出手。",
   "home.consumer.active.allowed": "个动作已放行",
   "home.consumer.active.reviewed": "个动作已询问",
   "home.consumer.active.blocked": "个动作已被阻止",
   "home.consumer.active.viewActivity": "查看活动",
   "home.consumer.active.pause": "暂停",
   "home.consumer.active.pausing": "暂停中…",
+  "home.consumer.active.pauseHint": "暂停后，在你重新开启前不会再有强制拦截。",
+  "home.consumer.active.lastBlocked": "最近一次被拦截的动作",
+  "home.consumer.active.lastBlockedEmpty": "还没有拦截记录。",
+  "home.consumer.active.supported": "保护经由受支持边界通过的 AI 动作。",
   "home.consumer.activity.title": "AI 做了什么",
   "home.consumer.activity.viewAll": "查看全部",
   "home.consumer.activity.empty": "暂无活动。AI 自动化开始工作后，动作会显示在这里。",
@@ -743,6 +916,9 @@ const zh: Dict = {
   "approval.risk": "风险",
   "approval.reason": "原因",
   "approval.matchedRule": "匹配规则",
+  "approval.technical": "技术细节",
+  "approval.technical.category": "类别",
+  "approval.technical.actionId": "动作 ID",
   "approval.dueIn": "自动拒绝倒计时",
   "approval.timeout": "已超时 — 拒绝",
   "approval.expired": "审批已过期或已处理",
@@ -764,6 +940,70 @@ const zh: Dict = {
   "win.max": "最大化",
   "win.restore": "还原",
   "win.close": "关闭",
+  "nav.dashboard": "概览",
+  "nav.activity": "活动",
+  "brand.tag": "AI 安全边界",
+  "sidebar.protectionActive": "防护已开启",
+  "sidebar.protectionInactive": "防护已关闭",
+  "onboarding.tagline": "保护你的电脑，免受 AI 越界操作的风险。",
+  "onboarding.cta": "保护这台电脑",
+  "onboarding.starting": "启动中…",
+  "onboarding.defaults": "默认：当前目录 · 推荐保护模式",
+  "onboarding.advanced": "高级设置",
+  "onboarding.workspace": "受保护工作目录",
+  "onboarding.workspaceHint": "AI 自动化只能访问该目录内的文件。",
+  "onboarding.privacy": "仅本地 · 无需账号 · 无遥测",
+  "onboarding.startError": "启动保护失败。请确认 ActionGuard CLI 已安装并在 PATH 中。",
+  "home.consumer.onboarding.changeDir": "更改",
+  "dashboard.hero.active": "AI 可以工作，控制权在你。",
+  "dashboard.hero.inactive": "防护未开启",
+  "dashboard.hero.activeSub": "高风险操作会在执行前经过 ActionGuard 检查。",
+  "dashboard.hero.inactiveSub": "当前 AI 未被监控。开启防护，让 AI 在安全的边界内工作。",
+  "dashboard.meta.enforced": "已拦截",
+  "dashboard.meta.stopped": "已停止",
+  "dashboard.meta.mode": "模式",
+  "dashboard.meta.scope": "范围",
+  "dashboard.mode.recommended": "推荐",
+  "dashboard.scope.thisComputer": "本机",
+  "dashboard.action.viewActivity": "查看活动",
+  "dashboard.action.pause": "暂停防护",
+  "dashboard.action.pausing": "暂停中…",
+  "dashboard.action.protect": "保护这台电脑",
+  "dashboard.action.starting": "启动中…",
+  "dashboard.stat.total": "总操作",
+  "dashboard.stat.allowed": "已放行",
+  "dashboard.stat.asked": "已询问",
+  "dashboard.stat.blocked": "已拦截",
+  "dashboard.activity.title": "最近活动",
+  "dashboard.activity.viewAll": "查看全部",
+  "dashboard.activity.empty": "还没有检测到 AI 操作。当 AI 开始工作后，活动会出现在这里。",
+  "dashboard.review.title": "待审核",
+  "dashboard.review.requestedBy": "请求来源",
+  "dashboard.review.viewAll": "查看全部审核",
+  "dashboard.boundaries.title": "受保护边界",
+  "dashboard.boundaries.empty": "暂无活跃边界。开启防护后，这里会显示已覆盖的执行路径。",
+  "dashboard.advanced.title": "高级设置",
+  "nav.live": "实时监控",
+  "home.active.confirmStop": "停止当前会话？已记录的动作会保留在账本中。",
+  "home.advanced.title": "高级",
+  "home.advanced.workspace.title": "工作空间",
+  "home.advanced.workspace.hint": "仅监控该目录内的文件。",
+  "home.advanced.mode.title": "防护模式",
+  "home.advanced.mode.interactive": "交互式",
+  "home.advanced.mode.observe": "观察",
+  "home.advanced.mode.observeDesc": "观察模式仅记录，不拦截。",
+  "home.advanced.rules.title": "策略规则",
+  "home.advanced.rules.empty": "未加载规则。",
+  "home.advanced.enforcement.title": "强制执行",
+  "home.advanced.enforcement.empty": "无强制执行数据。",
+  "home.advanced.diagnostics.title": "诊断",
+  "home.advanced.diagnostics.run": "运行诊断",
+  "home.advanced.diagnostics.desc": "检查边界覆盖与系统状态。",
+  "home.metrics.title": "关键指标",
+  "home.metrics.sessions": "会话",
+  "home.metrics.flagged": "标记",
+  "home.metrics.rate": "比率",
+  "home.metrics.blockedActions": "已拦截",
 };
 
 const DICTS: Record<Lang, Dict> = { en, zh };

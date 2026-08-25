@@ -1,1355 +1,908 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { homeDir } from "@tauri-apps/api/path";
-import { api } from "../api";
+import { computed, onMounted, ref, watch } from "vue";
 import { useStore } from "../store";
-import { useI18n, type DictKey } from "../i18n";
-import type { SessionMode, ActionCategory, Decision } from "../types";
-
-/** Minimal shape of a ledger row as surfaced by the store (readonly). */
-interface ActivityItem {
-  id: string;
-  time_hms: string;
-  category: ActionCategory;
-  kind: string;
-  target: string;
-  decision: Decision;
-  result: string;
-  reasons: readonly string[];
-}
-
-const { state, navigate, setView, refreshSessions, refreshActiveStats, refreshLedger } =
-  useStore();
+import { useI18n } from "../i18n";
+import { api } from "../api";
+const store = useStore();
+const { state } = store;
 const { t } = useI18n();
 
-const workspace = ref<string | null>(null);
-const picking = ref(false);
+const isRunning = computed(() => state.session !== null);
+const stats = computed(() => state.activeStats);
+const recentLedger = computed(() => state.ledger.slice(0, 8));
+const pendingCount = computed(() => state.pendingApprovals.length);
+
 const starting = ref(false);
-const error = ref<string | null>(null);
-const mode = ref<SessionMode>("protected");
+const stopping = ref(false);
+const showAdvanced = ref(false);
+const policyRules = ref<Array<{ name: string; action: string }>>([]);
+const policyError = ref<string | null>(null);
+const enforce = ref<{ boundaries: { name: string; status: string }[] } | null>(null);
 
-async function chooseFolder() {
-  error.value = null;
-  picking.value = true;
-  try {
-    workspace.value = await api.chooseWorkspace();
-  } catch (e) {
-    error.value = String(e);
-  } finally {
-    picking.value = false;
-  }
-}
+const totalActions = computed(() => stats.value?.total_actions ?? 0);
+const allowedCount = computed(() => {
+  const total = stats.value?.total_actions ?? 0;
+  const blocked = stats.value?.actions_blocked ?? 0;
+  return Math.max(0, total - blocked);
+});
+const blockedCount = computed(() => stats.value?.actions_blocked ?? 0);
 
-async function start() {
-  if (!workspace.value || starting.value) return;
+async function startProtection() {
   starting.value = true;
-  error.value = null;
   try {
-    const session = await api.startSession(workspace.value, mode.value);
-    navigate("session", session);
+    await api.startSession(".", "protected");
+    await store.refreshActiveStats();
+    await store.refreshLedger();
   } catch (e) {
-    error.value = String(e);
+    /* ignore */
   } finally {
     starting.value = false;
   }
 }
 
-const isRunning = computed(() => state.session !== null);
-
-const para = computed(() => state.paraStats);
-const rateColor = computed(() => {
-  const r = para.value.rate;
-  if (r >= 50) return "red";
-  if (r >= 20) return "amber";
-  return "green";
-});
-
-const startBtnLabel = computed(() =>
-  mode.value === "observe"
-    ? t("home.mode.observe")
-    : t("home.startBtn"),
-);
-
-// ===========================================================================
-// Consumer entry — "Protect this computer"
-// ===========================================================================
-const consumerPhase = ref<"landing" | "onboarding">("landing");
-const consumerStarting = ref(false);
-const consumerError = ref<string | null>(null);
-const pausing = ref(false);
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-const stats = computed(() => state.activeStats);
-const activity = computed(() => state.ledger);
-
-const allowedCount = computed(() => stats.value?.actions_protected ?? 0);
-const blockedCount = computed(() => stats.value?.actions_blocked ?? 0);
-const reviewedCount = computed(() => {
-  const s = stats.value;
-  if (!s) return 0;
-  const r = s.total_actions - s.actions_protected - s.actions_blocked;
-  return r > 0 ? r : 0;
-});
-
-const protectItems = computed(() => [
-  t("home.consumer.onboarding.protect.file"),
-  t("home.consumer.onboarding.protect.shell"),
-  t("home.consumer.onboarding.protect.git"),
-  t("home.consumer.onboarding.protect.package"),
-  t("home.consumer.onboarding.protect.secret"),
-]);
-
-/** Start protection over the whole machine (user home folder) via the existing session engine. */
-async function startConsumer() {
-  if (consumerStarting.value) return;
-  consumerStarting.value = true;
-  consumerError.value = null;
-  try {
-    const dir = await homeDir();
-    const session = await api.startSession(dir, "protected");
-    navigate("home", session);
-    consumerPhase.value = "landing";
-    startConsumerPolling();
-  } catch (e) {
-    consumerError.value = String(e);
-  } finally {
-    consumerStarting.value = false;
-  }
-}
-
-async function pauseProtection() {
-  if (pausing.value) return;
-  pausing.value = true;
-  consumerError.value = null;
+async function stopProtection() {
+  if (!confirm(t("home.active.confirmStop"))) return;
+  stopping.value = true;
   try {
     await api.stopSession();
-    setView("home");
-    stopConsumerPolling();
+    await store.refreshActiveStats();
+    await store.refreshLedger();
   } catch (e) {
-    consumerError.value = String(e);
+    /* ignore */
   } finally {
-    pausing.value = false;
+    stopping.value = false;
   }
 }
 
-function startConsumerPolling() {
-  stopConsumerPolling();
-  void Promise.all([refreshActiveStats(), refreshLedger(12)]);
-  pollTimer = setInterval(() => {
-    void Promise.all([refreshActiveStats(), refreshLedger(12)]);
-  }, 3000);
+async function loadAdvanced() {
+  policyRules.value = [];
+  policyError.value = null;
+  enforce.value = null;
 }
 
-function stopConsumerPolling() {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
-}
-
-function describe(e: ActivityItem): string {
-  const parts: string[] = [];
-  parts.push(t(`category.${e.category}` as DictKey) || e.category);
-  if (e.kind) parts.push(e.kind);
-  if (e.target) parts.push(e.target);
-  return parts.join(" · ");
-}
-
-function actIcon(e: ActivityItem): string {
-  if (e.decision === "deny" || e.result === "blocked") return "🛑";
-  if (e.decision === "ask") return "⏸";
+function activityIcon(entry: typeof state.ledger[number]): string {
+  if (entry.result === "deny") return "🛡";
+  if (entry.result === "ask" || entry.risk === "high" || entry.risk === "critical") return "⚠";
   return "✓";
 }
 
-function actClass(e: ActivityItem): string {
-  if (e.decision === "deny" || e.result === "blocked") return "red";
-  if (e.decision === "ask") return "amber";
-  return "green";
+function activityClass(entry: typeof state.ledger[number]): string {
+  if (entry.result === "deny") return "act-blocked";
+  if (entry.result === "ask" || entry.risk === "high" || entry.risk === "critical") return "act-asked";
+  return "act-allowed";
 }
 
-// Consume CLI startup args from `actionguard protect <workspace> [--observe]`.
-onMounted(async () => {
-  const args = state.startupArgs;
-  if (args?.workspace) {
-    workspace.value = args.workspace;
-    mode.value = args.mode;
-    await start();
-    return;
-  }
-  if (state.session) {
-    startConsumerPolling();
-  }
+function fmtTime(ts: string): string {
+  const d = new Date(ts);
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function goActivity() {
+  store.setView("history");
+}
+
+function goReview() {
+  store.setView("review");
+}
+
+watch(showAdvanced, (v) => {
+  if (v) void loadAdvanced();
 });
 
-onBeforeUnmount(() => {
-  stopConsumerPolling();
+onMounted(() => {
+  if (isRunning.value) {
+    void store.refreshActiveStats();
+    void store.refreshLedger();
+    void store.refreshPendingApprovals();
+  }
 });
 </script>
 
 <template>
-  <div class="home">
-    <!-- ========= Consumer entry: Protect this computer ========= -->
-    <div v-if="!isRunning" class="consumer-card">
-      <!-- Landing -->
-      <template v-if="consumerPhase === 'landing'">
-        <div class="consumer-badge">🛡 {{ t("home.consumer.badge") }}</div>
-        <h2 class="consumer-title">{{ t("home.consumer.title") }}</h2>
-        <p class="consumer-sub">{{ t("home.consumer.subtitle") }}</p>
-        <button class="consumer-cta" @click="consumerPhase = 'onboarding'">
-          🛡 {{ t("home.consumer.cta") }}
-        </button>
-        <p class="consumer-trust">{{ t("home.consumer.trust") }}</p>
-      </template>
-
-      <!-- Onboarding -->
-      <template v-else>
-        <div class="consumer-badge">🛡 {{ t("home.consumer.badge") }}</div>
-        <h2 class="consumer-title sm">{{ t("home.consumer.onboarding.title") }}</h2>
-
-        <div class="ob-block">
-          <!-- Step 1: scope -->
-          <div class="ob-row">
-            <div class="ob-step">1</div>
-            <div class="ob-col">
-              <div class="ob-label">{{ t("home.consumer.onboarding.scope.title") }}</div>
-              <div class="ob-option">
-                <div class="ob-option-head">
-                  <span>💻</span>
-                  <span>{{ t("home.consumer.onboarding.scope.computer") }}</span>
-                </div>
-                <span class="ob-desc">{{ t("home.consumer.onboarding.scope.computerDesc") }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 2: protection level -->
-          <div class="ob-row">
-            <div class="ob-step">2</div>
-            <div class="ob-col">
-              <div class="ob-label">{{ t("home.consumer.onboarding.level.title") }}</div>
-              <div class="ob-option">
-                <div class="ob-option-head">
-                  <span>⭐</span>
-                  <span>{{ t("home.consumer.onboarding.level.recommended") }}</span>
-                </div>
-                <span class="ob-desc">{{
-                  t("home.consumer.onboarding.level.recommendedDesc")
-                }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 3: what gets protected -->
-          <div class="ob-row">
-            <div class="ob-step">3</div>
-            <div class="ob-col">
-              <div class="ob-label">{{ t("home.consumer.onboarding.protect.title") }}</div>
-              <div class="ob-checks">
-                <span v-for="item in protectItems" :key="item" class="ob-check">
-                  <span class="ok">✓</span>{{ item }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="ob-actions">
-            <button class="btn" :disabled="consumerStarting" @click="consumerPhase = 'landing'">
-              {{ t("home.consumer.onboarding.back") }}
-            </button>
-            <button
-              class="btn btn-primary big"
-              :disabled="consumerStarting"
-              @click="startConsumer"
-            >
-              <span v-if="consumerStarting" class="spin"></span>
-              <template v-if="consumerStarting">
-                {{ t("home.consumer.starting") }}
-              </template>
-              <template v-else>
-                🛡 {{ t("home.consumer.onboarding.start") }}
-              </template>
-            </button>
-          </div>
-
-          <p v-if="consumerError" class="ob-error">{{ consumerError }}</p>
-        </div>
-      </template>
-    </div>
-
-    <!-- ========= Protection Active ========= -->
-    <div v-else class="consumer-card active-card">
-      <div class="active-head">
-        <div>
-          <div class="consumer-badge">🛡 {{ t("home.consumer.badge") }}</div>
-          <h2 class="consumer-title sm">{{ t("home.consumer.active.title") }}</h2>
-          <p class="consumer-sub">{{ t("home.consumer.active.subtitle") }}</p>
-        </div>
-        <button class="btn" :disabled="pausing" @click="pauseProtection">
-          {{ pausing ? t("home.consumer.active.pausing") : "⏸ " + t("home.consumer.active.pause") }}
-        </button>
-      </div>
-
-      <div class="active-stats">
-        <div class="active-cell">
-          <div class="av">{{ allowedCount.toLocaleString() }}</div>
-          <div class="ak">{{ t("home.consumer.active.allowed") }}</div>
-        </div>
-        <div class="active-cell">
-          <div class="av amber">{{ reviewedCount.toLocaleString() }}</div>
-          <div class="ak">{{ t("home.consumer.active.reviewed") }}</div>
-        </div>
-        <div class="active-cell">
-          <div class="av red">{{ blockedCount.toLocaleString() }}</div>
-          <div class="ak">{{ t("home.consumer.active.blocked") }}</div>
-        </div>
-      </div>
-
-      <button class="btn btn-ghost act-more" @click="setView('history')">
-        {{ t("home.consumer.active.viewActivity") }} →
-      </button>
-
-      <p v-if="consumerError" class="ob-error">{{ consumerError }}</p>
-    </div>
-
-    <!-- ========= Activity: what AI did ========= -->
-    <div v-if="isRunning" class="card activity-card">
-      <div class="activity-head">
-        <h2>{{ t("home.consumer.activity.title") }}</h2>
-        <button class="btn btn-ghost" @click="setView('history')">
-          {{ t("home.consumer.activity.viewAll") }} →
-        </button>
-      </div>
-
-      <p v-if="!activity.length" class="hint activity-empty">
-        {{ t("home.consumer.activity.empty") }}
-      </p>
-
-      <div v-for="e in activity.slice(0, 8)" :key="e.id" class="activity-item">
-        <span class="act-icon" :class="actClass(e)">{{ actIcon(e) }}</span>
-        <div class="act-body">
-          <div class="act-line">
-            <span class="act-time">{{ e.time_hms }}</span>
-            <span class="act-text">{{ describe(e) }}</span>
-          </div>
-          <details v-if="e.decision === 'deny' || e.result === 'blocked'" class="act-why">
-            <summary>{{ t("home.consumer.activity.why") }}</summary>
-            <div class="act-why-body">
-              <div class="why-row">
-                <span>{{ t("home.consumer.activity.rule") }}</span>
-                <span class="val">{{ (e.reasons || []).join(", ") || "—" }}</span>
-              </div>
-              <div class="why-row">
-                <span>{{ t("home.consumer.activity.decision") }}</span>
-                <span class="val">DENY</span>
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-    </div>
-
-    <!-- ========= Advanced (developer workflow) ========= -->
-    <details class="advanced card">
-      <summary>
-        <span class="advanced-title">◈ {{ t("home.consumer.advanced") }}</span>
-        <span class="advanced-hint">{{ t("home.consumer.advancedHint") }}</span>
-      </summary>
-
-      <div class="advanced-body">
-        <!-- Hero -->
-        <div class="hero">
-          <div class="hero-badge">◈ {{ t("app.tagline") }}</div>
-          <h1 class="title">
-            {{ t("home.title1") }}<br />
-            <span class="accent">{{ t("home.title2") }}</span>
-          </h1>
-          <p class="subtitle">
-            {{ t("home.subtitle") }}
+  <div class="dashboard">
+    <!-- ========== HERO ========== -->
+    <div class="hero-card">
+      <div class="hero-main">
+        <div class="hero-shield" :class="{ inactive: !isRunning }">🛡</div>
+        <div class="hero-body">
+          <h2 class="hero-headline">
+            {{ isRunning ? t("dashboard.hero.active") : t("dashboard.hero.inactive") }}
+          </h2>
+          <p class="hero-sub">
+            {{ isRunning ? t("dashboard.hero.activeSub") : t("dashboard.hero.inactiveSub") }}
           </p>
-          <div class="hero-pills">
-            <span class="pill pill-green">{{ t("home.pill.deterministic") }}</span>
-            <span class="pill pill-blue">{{ t("home.pill.neutral") }}</span>
-            <span class="pill pill-amber">{{ t("home.pill.localOnly") }}</span>
+          <div class="hero-meta">
+            <span class="meta-chip">
+              <span class="meta-dot" :class="{ active: isRunning }" />
+              {{ isRunning ? t("dashboard.meta.enforced") : t("dashboard.meta.stopped") }}
+            </span>
+            <span class="meta-chip">{{ t("dashboard.meta.mode") }}: {{ t("dashboard.mode.recommended") }}</span>
+            <span class="meta-chip">{{ t("dashboard.meta.scope") }}: {{ t("dashboard.scope.thisComputer") }}</span>
           </div>
         </div>
+      </div>
 
-        <!-- Steps card -->
-        <div class="card workspace-card">
-          <div class="step">
-            <h2 class="step-title">
-              <span class="num">1</span>
-              <span>{{ t("home.step1.title") }}</span>
-            </h2>
-            <p class="hint">{{ t("home.step1.hint") }}</p>
-            <div class="picker">
-              <button class="btn btn-ghost" :disabled="picking" @click="chooseFolder">
-                <span class="pick-icon">📁</span>
-                {{ picking ? t("home.chooseLoading") : t("home.choose") }}
-              </button>
-              <div class="path" :class="{ empty: !workspace }">
-                {{ workspace ?? t("home.noFolder") }}
-              </div>
-            </div>
-          </div>
+      <div class="hero-actions">
+        <template v-if="isRunning">
+          <button class="btn" @click="goActivity">
+            {{ t("dashboard.action.viewActivity") }}
+          </button>
+          <button class="btn btn-danger" :disabled="stopping" @click="stopProtection">
+            {{ stopping ? t("dashboard.action.pausing") : t("dashboard.action.pause") }}
+          </button>
+        </template>
+        <template v-else>
+          <button class="btn btn-primary ob-cta" :disabled="starting" @click="startProtection">
+            <span v-if="starting" class="ob-spinner" />
+            <span v-else>🛡</span>
+            {{ starting ? t("dashboard.action.starting") : t("dashboard.action.protect") }}
+          </button>
+        </template>
+      </div>
+    </div>
 
-          <div class="divider"></div>
-
-          <!-- Mode A / Mode B selector -->
-          <div class="step">
-            <h2 class="step-title">
-              <span class="num">2</span>
-              <span>{{ t("home.mode.title") }}</span>
-            </h2>
-            <p class="hint">{{ t("home.mode.hint") }}</p>
-            <div class="mode-picker">
-              <button
-                class="mode-card"
-                :class="{ active: mode === 'observe' }"
-                @click="mode = 'observe'"
-              >
-                <div class="mode-head">
-                  <div class="mode-name">{{ t("home.mode.observe") }}</div>
-                  <span class="mode-tag mode-tag-ghost">{{ t("home.mode.tagObserve") }}</span>
-                </div>
-                <p class="mode-desc">{{ t("home.mode.observe.desc") }}</p>
-              </button>
-              <button
-                class="mode-card"
-                :class="{ active: mode === 'protected' }"
-                @click="mode = 'protected'"
-              >
-                <div class="mode-head">
-                  <div class="mode-name">{{ t("home.mode.protected") }}</div>
-                  <span class="mode-tag mode-tag-protect">{{ t("home.mode.tagProtected") }}</span>
-                </div>
-                <p class="mode-desc">{{ t("home.mode.protected.desc") }}</p>
-              </button>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="step">
-            <h2 class="step-title">
-              <span class="num">3</span>
-              <span>{{ t("home.step2.title") }}</span>
-            </h2>
-            <p class="hint">{{ t("home.step2.hint") }}</p>
-            <div class="actions">
-              <button class="btn btn-primary big" :disabled="!workspace || starting" @click="start">
-                <span v-if="starting" class="spin"></span>
-                <span v-if="starting">{{ t("home.starting") }}</span>
-                <template v-else>
-                  <span class="shield">◈</span>
-                  {{ startBtnLabel }}
-                </template>
-              </button>
-              <button v-if="isRunning" class="btn" @click="setView('session')">
-                {{ t("home.resumeSession") }} #{{ state.session!.num.toString().padStart(5, "0") }}
-              </button>
-            </div>
-          </div>
-
-          <p v-if="error" class="error">{{ error }}</p>
+    <!-- ========== STATS ========== -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">{{ t("dashboard.stat.total") }}</div>
+        <div class="stat-num">{{ totalActions }}</div>
+      </div>
+      <div class="stat-card allowed">
+        <div class="stat-label">{{ t("dashboard.stat.allowed") }}</div>
+        <div class="stat-num">{{ allowedCount }}</div>
+        <div v-if="totalActions > 0" class="stat-pct">
+          {{ totalActions ? Math.round((allowedCount / totalActions) * 100) : 0 }}%
         </div>
+      </div>
+      <div class="stat-card asked">
+        <div class="stat-label">{{ t("dashboard.stat.asked") }}</div>
+        <div class="stat-num">{{ pendingCount }}</div>
+        <div v-if="totalActions > 0" class="stat-pct">
+          {{ totalActions ? Math.round((pendingCount / totalActions) * 100) : 0 }}%
+        </div>
+      </div>
+      <div class="stat-card blocked">
+        <div class="stat-label">{{ t("dashboard.stat.blocked") }}</div>
+        <div class="stat-num">{{ blockedCount }}</div>
+        <div v-if="totalActions > 0" class="stat-pct">
+          {{ totalActions ? Math.round((blockedCount / totalActions) * 100) : 0 }}%
+        </div>
+      </div>
+    </div>
 
-        <!-- Actions Detected (Detection != Protection) -->
-        <div class="card para-card" v-if="state.sessionsLoaded">
-          <div class="para-head">
-            <div>
-              <div class="para-kicker">✦ {{ t("home.protected.keyMetric") }}</div>
-              <h2>{{ t("home.protected.title") }}</h2>
-              <p class="hint">{{ t("home.protected.desc") }}</p>
-            </div>
-            <div class="rate-big" :class="rateColor">
-              <span class="rate-v">{{ para.actionsProtected.toLocaleString() }}</span>
-              <span class="rate-k">{{ t("home.protected.protectedLabel") }}</span>
-            </div>
-          </div>
-          <div class="para-grid">
-            <div class="para-cell">
-              <div class="pv red">{{ para.actionsBlocked.toLocaleString() }}</div>
-              <div class="pk">{{ t("home.protected.blockedLabel") }}</div>
-            </div>
-            <div class="para-cell">
-              <div class="pv purple">{{ para.critical }}</div>
-              <div class="pk">{{ t("home.protected.criticalLabel") }}</div>
-            </div>
-            <div class="para-cell">
-              <div class="pv red">{{ para.high }}</div>
-              <div class="pk">{{ t("home.protected.highLabel") }}</div>
-            </div>
-            <div class="para-cell">
-              <div class="pv amber">{{ para.rate }}%</div>
-              <div class="pk">{{ t("home.para.rate") }}</div>
-            </div>
-          </div>
-          <button v-if="!isRunning" class="btn btn-ghost right-link" @click="refreshSessions">
-            ↻
+    <!-- ========== MAIN GRID ========== -->
+    <div class="dash-grid">
+      <!-- Recent Activity -->
+      <div class="dash-card activity-card">
+        <div class="dash-header">
+          <h3>{{ t("dashboard.activity.title") }}</h3>
+          <button v-if="recentLedger.length > 0" class="btn-ghost-link" @click="goActivity">
+            {{ t("dashboard.activity.viewAll") }}
           </button>
         </div>
 
-        <!-- Info card -->
-        <div class="note card">
-          <div class="nrow">
-            <strong>{{ t("home.whatMonitored.k") }}</strong>
-            <span>{{ t("home.whatMonitored.v") }}</span>
-          </div>
-          <div class="nrow">
-            <strong>{{ t("home.whatFlagged.k") }}</strong>
-            <span>{{ t("home.whatFlagged.v") }}</span>
-          </div>
-          <div class="nrow">
-            <strong>{{ t("home.undo.k") }}</strong>
-            <span>{{ t("home.undo.v") }}</span>
-          </div>
-          <div class="nrow team-row">
-            <strong>{{ t("home.team.k") }}</strong>
-            <span>{{ t("home.team.v") }}</span>
+        <div v-if="recentLedger.length === 0" class="activity-empty">
+          <div class="empty-icon">📭</div>
+          <p>{{ t("dashboard.activity.empty") }}</p>
+        </div>
+
+        <div v-else class="activity-list">
+          <div
+            v-for="entry in recentLedger"
+            :key="entry.id"
+            class="activity-row"
+            :class="activityClass(entry)"
+          >
+            <span class="act-icon">{{ activityIcon(entry) }}</span>
+            <div class="act-body">
+              <div class="act-primary">
+                <span class="act-cat">{{ entry.category }}</span>
+                <span class="act-target">{{ entry.target }}</span>
+              </div>
+              <div class="act-secondary">
+                <span class="act-decision">{{ entry.decision }}</span>
+                <span class="act-time">{{ fmtTime(entry.timestamp) }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </details>
+
+      <!-- Right column -->
+      <div class="dash-col">
+        <!-- Review Queue -->
+        <div v-if="pendingCount > 0" class="dash-card review-card">
+          <div class="dash-header">
+            <h3>{{ t("dashboard.review.title") }}</h3>
+            <span class="review-badge">{{ pendingCount }}</span>
+          </div>
+          <div class="review-list">
+            <div
+              v-for="req in state.pendingApprovals.slice(0, 3)"
+              :key="req.id"
+              class="review-row"
+            >
+              <div class="review-body">
+                <div class="review-action">{{ req.action.target }}</div>
+                <div class="review-meta">{{ t("dashboard.review.requestedBy") }} {{ req.action.agent ?? "AI" }}</div>
+              </div>
+              <div class="review-btns">
+                <button class="btn btn-primary btn-sm" @click="store.resolveApproval(req.id, 'allow', false)">
+                  {{ t("review.allow") }}
+                </button>
+                <button class="btn btn-danger btn-sm" @click="store.resolveApproval(req.id, 'deny', false)">
+                  {{ t("review.deny") }}
+                </button>
+              </div>
+            </div>
+          </div>
+          <button v-if="pendingCount > 3" class="btn-ghost-link" @click="goReview">
+            {{ t("dashboard.review.viewAll") }}
+          </button>
+        </div>
+
+        <!-- Protected Boundaries -->
+        <div class="dash-card boundaries-card">
+          <div class="dash-header">
+            <h3>{{ t("dashboard.boundaries.title") }}</h3>
+          </div>
+          <div v-if="false" class="boundary-list">
+            <!-- Boundaries data not yet available in ActiveStatsPayload -->
+          </div>
+          <div class="boundary-empty">
+            {{ t("dashboard.boundaries.empty") }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== ADVANCED ========== -->
+    <div class="advanced-section">
+      <button class="advanced-toggle" @click="showAdvanced = !showAdvanced">
+        <span>{{ showAdvanced ? "▾" : "▸" }}</span>
+        {{ t("dashboard.advanced.title") }}
+      </button>
+
+      <div v-if="showAdvanced" class="advanced-content">
+        <!-- Workspace & Mode -->
+        <div class="adv-block">
+          <h4>{{ t("home.advanced.workspace.title") }}</h4>
+          <p class="adv-mono">{{ state.session?.workspace ?? "—" }}</p>
+          <p class="adv-hint">
+            {{ t("home.advanced.workspace.hint") }}
+          </p>
+          <div class="adv-mode">
+            <span class="mode-tag">{{ state.session?.mode === "protected" ? t("home.advanced.mode.interactive") : t("home.advanced.mode.observe") }}</span>
+          </div>
+        </div>
+
+        <!-- Rules -->
+        <div class="adv-block">
+          <h4>{{ t("home.advanced.rules.title") }}</h4>
+          <p v-if="policyError" class="adv-error">{{ policyError }}</p>
+          <ul v-else-if="policyRules.length" class="adv-rules">
+            <li v-for="r in policyRules" :key="r.name">
+              <span class="rule-name">{{ r.name }}</span>
+              <span class="rule-action">{{ r.action }}</span>
+            </li>
+          </ul>
+          <p v-else class="adv-empty">{{ t("home.advanced.rules.empty") }}</p>
+        </div>
+
+        <!-- Enforcement -->
+        <div class="adv-block">
+          <h4>{{ t("home.advanced.enforcement.title") }}</h4>
+          <ul v-if="enforce?.boundaries.length" class="adv-list">
+            <li v-for="b in enforce.boundaries" :key="b.name">
+              {{ b.name }} — <span :class="{ ok: b.status === 'enforced', warn: b.status !== 'enforced' }">{{ b.status }}</span>
+            </li>
+          </ul>
+          <p v-else class="adv-empty">{{ t("home.advanced.enforcement.empty") }}</p>
+        </div>
+
+        <!-- Diagnostics -->
+        <div class="adv-block">
+          <h4>{{ t("home.advanced.diagnostics.title") }}</h4>
+          <div class="adv-diag">
+            <p class="adv-hint">{{ t("home.advanced.diagnostics.desc") }}</p>
+          </div>
+        </div>
+
+        <!-- Metrics -->
+        <div class="adv-block">
+          <h4>{{ t("home.metrics.title") }}</h4>
+          <div class="metrics-row">
+            <div class="risk-pill" :class="{ 'risk-zero': state.paraStats.n === 0 }">
+              <span class="pill-num">{{ state.paraStats.n }}</span>
+              <span class="pill-label">{{ t("home.metrics.sessions") }}</span>
+            </div>
+            <div class="risk-pill" :class="{ 'risk-zero': state.paraStats.flagged === 0 }">
+              <span class="pill-num">{{ state.paraStats.flagged }}</span>
+              <span class="pill-label">{{ t("home.metrics.flagged") }}</span>
+            </div>
+            <div class="risk-pill" :class="{ 'risk-zero': state.paraStats.rate === 0 }">
+              <span class="pill-num">{{ state.paraStats.rate }}%</span>
+              <span class="pill-label">{{ t("home.metrics.rate") }}</span>
+            </div>
+            <div class="risk-pill" :class="{ 'risk-zero': state.paraStats.actionsBlocked === 0 }">
+              <span class="pill-num">{{ state.paraStats.actionsBlocked }}</span>
+              <span class="pill-label">{{ t("home.metrics.blockedActions") }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.home {
-  max-width: 900px;
-  margin: 0 auto;
+/* ---------- Dashboard Layout ---------- */
+.dashboard {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding-bottom: 10px;
+  gap: 20px;
 }
 
-/* ===== Consumer entry ===== */
-.consumer-card {
-  position: relative;
-  border-radius: var(--radius);
-  padding: 32px 30px;
-  background:
-    radial-gradient(1000px 380px at 10% -20%, rgba(34, 197, 94, 0.16), transparent 60%),
-    radial-gradient(700px 280px at 100% 0%, rgba(56, 189, 248, 0.12), transparent 55%),
-    linear-gradient(160deg, rgba(22, 33, 58, 0.95), rgba(15, 23, 42, 0.8));
+/* ---------- Hero ---------- */
+.hero-card {
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  overflow: hidden;
-}
-
-.consumer-card::after {
-  content: "🛡";
-  position: absolute;
-  right: -10px;
-  bottom: -38px;
-  font-size: 210px;
-  opacity: 0.045;
-  pointer-events: none;
-}
-
-.consumer-badge {
-  display: inline-flex;
+  border-radius: var(--radius);
+  padding: 28px 28px 24px;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  background: var(--green-glow);
-  color: var(--green);
-  border: 1px solid rgba(34, 197, 94, 0.35);
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  margin-bottom: 16px;
+  justify-content: space-between;
+  gap: 24px;
 }
 
-.consumer-title {
-  font-size: 27px;
-  line-height: 1.25;
-  letter-spacing: -0.3px;
-  font-weight: 700;
-  max-width: 620px;
-}
-
-.consumer-title.sm {
-  font-size: 20px;
-}
-
-.consumer-sub {
-  margin-top: 10px;
-  max-width: 640px;
-  color: var(--text-dim);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.consumer-cta {
-  margin-top: 24px;
-  display: inline-flex;
+.hero-main {
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 26px;
-  border-radius: 12px;
-  border: 1px solid rgba(34, 197, 94, 0.55);
-  background: linear-gradient(135deg, #16a34a, #15803d);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 6px 24px rgba(34, 197, 94, 0.25);
-  transition: all 0.15s ease;
+  gap: 20px;
+  flex: 1;
 }
 
-.consumer-cta:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 28px rgba(34, 197, 94, 0.35);
+.hero-shield {
+  font-size: 56px;
+  line-height: 1;
+  filter: drop-shadow(0 4px 24px rgba(34, 197, 94, 0.3));
+  flex-shrink: 0;
+  transition: filter 0.3s;
 }
 
-.consumer-trust {
-  margin-top: 16px;
-  color: var(--text-faint);
-  font-size: 12px;
+.hero-shield.inactive {
+  filter: grayscale(0.7) drop-shadow(0 4px 12px rgba(255, 255, 255, 0.05));
+  opacity: 0.6;
 }
 
-/* Onboarding */
-.ob-block {
+.hero-body {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  margin-top: 20px;
+  gap: 6px;
 }
 
-.ob-row {
+.hero-headline {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+
+.hero-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  max-width: 420px;
+}
+
+.hero-meta {
   display: flex;
-  gap: 14px;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
 }
 
-.ob-step {
-  width: 26px;
-  height: 26px;
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--bg-soft);
+  border: 1px solid var(--border-soft);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.meta-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--green-glow);
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  color: var(--green);
-  display: grid;
-  place-items: center;
-  font-size: 12.5px;
-  font-weight: 800;
+  background: var(--text-faint);
+}
+
+.meta-dot.active {
+  background: var(--green);
+  animation: pulse 1.6s infinite;
+}
+
+.hero-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   flex-shrink: 0;
+}
+
+.ob-cta {
+  padding: 12px 24px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+
+.ob-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Stats ---------- */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.stat-num {
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+}
+
+.stat-card.allowed .stat-num { color: var(--green); }
+.stat-card.asked .stat-num { color: var(--amber); }
+.stat-card.blocked .stat-num { color: var(--red); }
+
+.stat-pct {
+  font-size: 11px;
+  color: var(--text-faint);
   margin-top: 2px;
 }
 
-.ob-col {
-  flex: 1;
-  min-width: 0;
-}
-
-.ob-label {
-  font-size: 13.5px;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-
-.ob-option {
-  display: block;
-  background: var(--bg-soft);
-  border: 1.5px solid rgba(34, 197, 94, 0.45);
-  border-radius: 12px;
-  padding: 12px 16px;
-}
-
-.ob-option-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  font-weight: 700;
-}
-
-.ob-desc {
-  display: block;
-  margin-top: 5px;
-  font-size: 12px;
-  color: var(--text-dim);
-  line-height: 1.5;
-}
-
-.ob-checks {
+/* ---------- Grid ---------- */
+.dash-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 18px;
-}
-
-.ob-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-
-.ob-check .ok {
-  color: var(--green);
-  font-weight: 800;
-}
-
-.ob-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 6px;
-}
-
-.ob-error {
-  margin-top: 12px;
-  color: #fca5a5;
-  font-size: 12.5px;
-  font-family: var(--mono);
-}
-
-/* Protection active */
-.active-card {
-  padding-bottom: 26px;
-}
-
-.active-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  grid-template-columns: 1.4fr 1fr;
   gap: 16px;
 }
 
-.active-stats {
-  margin-top: 22px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  max-width: 640px;
+.dash-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
 }
 
-.active-cell {
-  background: var(--bg-soft);
-  border: 1px solid var(--border-soft);
-  border-radius: 12px;
-  padding: 16px 14px;
-  text-align: center;
-}
-
-.active-cell .av {
-  font-family: var(--mono);
-  font-size: 26px;
-  font-weight: 800;
-  color: var(--green);
-}
-
-.active-cell .av.amber {
-  color: var(--amber);
-}
-
-.active-cell .av.red {
-  color: #fca5a5;
-}
-
-.active-cell .ak {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-
-.act-more {
-  margin-top: 18px;
-}
-
-/* Activity */
-.activity-card {
-  padding-bottom: 8px;
-}
-
-.activity-head {
+.dash-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  margin-bottom: 14px;
 }
 
-.activity-head h2 {
-  font-size: 16px;
+.dash-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
 }
 
+.btn-ghost-link {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--sans);
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.12s;
+}
+
+.btn-ghost-link:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ---------- Activity ---------- */
 .activity-empty {
-  margin: 4px 0 10px;
+  text-align: center;
+  padding: 36px 20px;
+  color: var(--text-faint);
 }
 
-.activity-item {
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+
+.activity-list {
   display: flex;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-soft);
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.activity-item:last-child {
-  border-bottom: none;
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-soft);
+  transition: background 0.12s;
+}
+
+.activity-row:hover {
+  background: var(--bg-card-hover);
 }
 
 .act-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 900;
+  font-size: 14px;
+  width: 22px;
+  text-align: center;
   flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.act-icon.green {
-  background: var(--green-glow);
-  color: var(--green);
-  border: 1px solid rgba(34, 197, 94, 0.35);
-}
-
-.act-icon.amber {
-  background: var(--amber-glow);
-  color: var(--amber);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-}
-
-.act-icon.red {
-  background: var(--red-glow);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
 .act-body {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.act-line {
+.act-primary {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  overflow: hidden;
+}
+
+.act-cat {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.act-row.act-allowed .act-cat { background: rgba(34, 197, 94, 0.12); color: var(--green); }
+.act-row.act-asked .act-cat { background: var(--amber-glow); color: var(--amber); }
+.act-row.act-blocked .act-cat { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
+
+.act-target {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.act-secondary {
+  display: flex;
+  align-items: center;
   gap: 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.act-decision {
+  text-transform: capitalize;
 }
 
 .act-time {
   font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-faint);
-  flex-shrink: 0;
 }
 
-.act-text {
-  font-size: 13px;
-  color: var(--text);
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.act-why {
-  margin-top: 6px;
-}
-
-.act-why summary {
-  cursor: pointer;
-  font-size: 11.5px;
-  color: #fca5a5;
-  list-style: none;
-  user-select: none;
-}
-
-.act-why summary::-webkit-details-marker {
-  display: none;
-}
-
-.act-why-body {
-  margin-top: 8px;
-  background: var(--bg-soft);
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.why-row {
-  display: flex;
-  gap: 10px;
-}
-
-.why-row span {
-  color: var(--text-faint);
-  flex-shrink: 0;
-  width: 74px;
-}
-
-.why-row .val {
-  color: var(--text);
-  font-family: var(--mono);
-  word-break: break-word;
-}
-
-/* Advanced */
-.advanced summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 16px 18px;
-}
-
-.advanced summary::-webkit-details-marker {
-  display: none;
-}
-
-.advanced-title {
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.advanced-hint {
-  font-size: 12px;
-  color: var(--text-faint);
-}
-
-.advanced-body {
-  padding: 4px 18px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-/* Hero */
-.hero {
-  position: relative;
-  border-radius: var(--radius);
-  padding: 28px 26px;
-  background:
-    radial-gradient(900px 320px at 0% -20%, rgba(34, 197, 94, 0.15), transparent 60%),
-    radial-gradient(700px 300px at 100% -10%, rgba(56, 189, 248, 0.12), transparent 60%),
-    linear-gradient(160deg, rgba(22, 33, 58, 0.9), rgba(15, 23, 42, 0.7));
-  border: 1px solid var(--border);
-  overflow: hidden;
-}
-
-.hero::after {
-  content: "◈";
-  position: absolute;
-  right: -12px;
-  bottom: -40px;
-  font-size: 230px;
-  color: rgba(34, 197, 94, 0.04);
-  font-weight: 900;
-  pointer-events: none;
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  background: var(--green-glow);
-  color: var(--green);
-  border: 1px solid rgba(34, 197, 94, 0.35);
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
+/* ---------- Review ---------- */
+.review-card {
   margin-bottom: 16px;
 }
 
-.hero .title {
-  font-size: 30px;
-  line-height: 1.22;
-  letter-spacing: -0.4px;
+.review-badge {
+  background: var(--red-soft);
+  color: #fff;
+  font-size: 11px;
   font-weight: 700;
-}
-
-.hero .title .accent {
-  background: linear-gradient(135deg, #22c55e, #38bdf8);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.hero .subtitle {
-  margin-top: 12px;
-  max-width: 680px;
-  color: var(--text-dim);
-  font-size: 14px;
-  line-height: 1.55;
-}
-
-.hero-pills {
-  margin-top: 18px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.pill {
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 4px 10px;
+  padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid;
-  letter-spacing: 0.3px;
+  min-width: 22px;
+  text-align: center;
 }
 
-.pill-green {
-  color: var(--green);
-  border-color: rgba(34, 197, 94, 0.35);
-  background: var(--green-glow);
-}
-
-.pill-blue {
-  color: var(--blue);
-  border-color: rgba(56, 189, 248, 0.3);
-  background: rgba(56, 189, 248, 0.08);
-}
-
-.pill-amber {
-  color: var(--amber);
-  border-color: rgba(245, 158, 11, 0.35);
-  background: var(--amber-glow);
-}
-
-/* Steps */
-.step-title {
+.review-list {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 16px;
-  margin-bottom: 4px;
-  font-weight: 700;
-}
-
-.step-title .num {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--green-glow);
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  color: var(--green);
-  display: grid;
-  place-items: center;
-  font-size: 13px;
-  font-weight: 800;
-  flex-shrink: 0;
-}
-
-.hint {
-  color: var(--text-dim);
-  font-size: 13px;
-  margin-bottom: 14px;
-  line-height: 1.5;
-}
-
-.picker {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.btn-ghost {
-  display: inline-flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
+  margin-bottom: 10px;
 }
 
-.pick-icon {
-  font-size: 14px;
-}
-
-.path {
-  flex: 1;
-  font-family: var(--mono);
-  font-size: 12.5px;
+.review-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
   background: var(--bg-soft);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  border: 1px solid var(--border-soft);
+}
+
+.review-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-action {
+  font-size: 12.5px;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-height: 38px;
 }
 
-.path.empty {
+.review-meta {
+  font-size: 11px;
   color: var(--text-faint);
+  margin-top: 2px;
 }
 
-.divider {
-  height: 1px;
-  background: var(--border-soft);
-  margin: 22px 0 24px;
+.review-btns {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
-/* Mode picker */
-.mode-picker {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
-.mode-card {
-  position: relative;
-  background: var(--bg-soft);
-  border: 1.5px solid var(--border);
-  border-radius: 14px;
-  padding: 18px 16px 16px;
-  cursor: pointer;
-  text-align: left;
-  font-family: var(--sans);
-  transition: all 0.15s ease;
+/* ---------- Boundaries ---------- */
+.boundary-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.mode-card:hover {
-  border-color: var(--green);
-  background: rgba(34, 197, 94, 0.06);
-  transform: translateY(-1px);
-}
-
-.mode-card.active {
-  border-color: var(--green);
-  background: linear-gradient(180deg, rgba(34, 197, 94, 0.14), rgba(22, 163, 74, 0.04));
-  box-shadow: 0 0 0 1px var(--green-soft) inset;
-}
-
-.mode-head {
+.boundary-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-soft);
+  font-size: 12px;
 }
 
-.mode-name {
-  font-size: 14px;
-  font-weight: 700;
+.b-icon {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.b-name {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.b-status {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.b-status.ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--green);
+}
+
+.b-status.warn {
+  background: var(--amber-glow);
+  color: var(--amber);
+}
+
+.boundary-empty {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 16px 8px;
+  text-align: center;
+}
+
+/* ---------- Advanced ---------- */
+.advanced-section {
+  margin-top: 4px;
+}
+
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all 0.15s;
+}
+
+.advanced-toggle:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.advanced-content {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.adv-block {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.adv-block h4 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.adv-mono {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-soft);
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft);
+  word-break: break-all;
+}
+
+.adv-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 6px;
+}
+
+.adv-mode {
+  margin-top: 10px;
 }
 
 .mode-tag {
   display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-
-.mode-tag-ghost {
-  background: rgba(56, 189, 248, 0.1);
-  color: var(--blue);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-}
-
-.mode-tag-protect {
-  background: var(--green-glow);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.1);
   color: var(--green);
-  border: 1px solid rgba(34, 197, 94, 0.35);
+  border: 1px solid rgba(34, 197, 94, 0.25);
 }
 
-.mode-desc {
+.adv-error {
+  font-size: 12px;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.adv-rules {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.adv-rules li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: var(--bg-soft);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.rule-name {
+  color: var(--text);
+}
+
+.rule-action {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--green);
+}
+
+.adv-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12px;
   color: var(--text-dim);
-  line-height: 1.5;
 }
 
-.actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
+.adv-list .ok { color: var(--green); font-weight: 600; }
+.adv-list .warn { color: var(--amber); font-weight: 600; }
 
-.big {
-  padding: 12px 22px;
-  font-size: 14px;
-}
-
-.shield {
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.spin {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(4, 20, 10, 0.35);
-  border-top-color: #04140a;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.error {
-  margin-top: 12px;
-  color: #fca5a5;
-  font-size: 12.5px;
-  font-family: var(--mono);
-}
-
-/* Para stats */
-.para-card {
-  position: relative;
-  overflow: hidden;
-}
-
-.para-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(420px 200px at 100% 0%, rgba(245, 158, 11, 0.1), transparent 60%);
-  pointer-events: none;
-}
-
-.para-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.para-kicker {
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  color: var(--amber);
-  margin-bottom: 4px;
-}
-
-.para-head h2 {
-  font-size: 18px;
-}
-
-.rate-big {
-  border-radius: 14px;
-  padding: 14px 20px;
-  border: 1px solid var(--border);
-  background: var(--bg-soft);
-  min-width: 160px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.rate-big.red {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: var(--red-glow);
-}
-
-.rate-big.amber {
-  border-color: rgba(245, 158, 11, 0.4);
-  background: var(--amber-glow);
-}
-
-.rate-big.green {
-  border-color: rgba(34, 197, 94, 0.4);
-  background: var(--green-glow);
-}
-
-.rate-big .rate-v {
-  font-family: var(--mono);
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.rate-big.red .rate-v { color: #fecaca; }
-.rate-big.amber .rate-v { color: #fde68a; }
-.rate-big.green .rate-v { color: var(--green); }
-
-.rate-big .rate-k {
-  font-size: 11px;
-  color: var(--text-dim);
-  letter-spacing: 0.6px;
-  margin-top: 4px;
-}
-
-.para-grid {
-  margin-top: 22px;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-.para-cell {
-  background: var(--bg-soft);
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  padding: 14px 14px 12px;
-}
-
-.para-cell .pv {
-  font-family: var(--mono);
-  font-size: 22px;
-  font-weight: 800;
-}
-
-.para-cell .pv.red { color: #fca5a5; }
-.para-cell .pv.amber { color: var(--amber); }
-.para-cell .pv.green { color: var(--green); }
-.para-cell .pv.purple { color: var(--purple); }
-
-.para-cell .pk {
-  margin-top: 2px;
-  font-size: 11px;
+.adv-empty {
+  font-size: 12px;
   color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  padding: 8px 0;
 }
 
-.right-link {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  opacity: 0.6;
-}
-
-.right-link:hover {
-  opacity: 1;
-}
-
-/* Info card */
-.note {
+.adv-diag {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.metrics-row {
+  display: flex;
   gap: 10px;
-  font-size: 12.5px;
-}
-
-.nrow {
-  display: grid;
-  grid-template-columns: 130px 1fr;
-  gap: 6px 16px;
-  align-items: start;
-}
-
-.nrow strong {
-  color: var(--text-dim);
-  font-weight: 600;
-  text-align: right;
-  padding-top: 1px;
-}
-
-.nrow span {
-  color: var(--text);
-  line-height: 1.5;
+  flex-wrap: wrap;
 }
 </style>

@@ -132,11 +132,29 @@ async function decide(decision: "allow" | "deny", learn: boolean) {
               <li v-for="(r, i) in current.action.reasons" :key="i">{{ r }}</li>
             </ul>
           </div>
-          <div v-if="current.action.matched_rule" class="line">
-            <span class="label">{{ t("approval.matchedRule") }}</span>
-            <code class="value rule-id">{{ current.action.matched_rule }}</code>
-          </div>
         </section>
+
+        <details class="technical">
+          <summary>⚙️ {{ t("approval.technical") }}</summary>
+          <div class="tech-body">
+            <div class="line">
+              <span class="label">{{ t("approval.matchedRule") }}</span>
+              <code class="value rule-id">{{ current.action.matched_rule ?? "—" }}</code>
+            </div>
+            <div class="line">
+              <span class="label">{{ t("approval.technical.category") }}</span>
+              <span class="value">{{ current.action.category ?? "—" }}</span>
+            </div>
+            <div class="line">
+              <span class="label">{{ t("approval.technical.actionId") }}</span>
+              <code class="value rule-id">{{ current.id }}</code>
+            </div>
+            <div class="line">
+              <span class="label">{{ t("approval.source") }}</span>
+              <span class="value">{{ current.action.agent ?? "—" }}</span>
+            </div>
+          </div>
+        </details>
 
         <div v-if="remaining > 0" class="countdown" :class="{ urgent: remaining <= 10 }">
           {{ t("approval.dueIn") }} {{ remaining }}s
@@ -314,6 +332,31 @@ async function decide(decision: "allow" | "deny", learn: boolean) {
   background: rgba(255, 255, 255, 0.05);
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.technical {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 12px;
+}
+
+.technical summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.technical summary:hover {
+  color: var(--text);
+}
+
+.tech-body {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .countdown {

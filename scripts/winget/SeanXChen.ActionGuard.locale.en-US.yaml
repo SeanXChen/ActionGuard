@@ -1,0 +1,20 @@
+# winget manifest — default locale.
+PackageIdentifier: SeanXChen.ActionGuard
+PackageVersion: 0.2.0
+PackageLocale: en-US
+Publisher: SeanXChen
+PackageName: ActionGuard
+PackageUrl: https://github.com/SeanXChen/ActionGuard
+License: Apache-2.0
+ShortDescription: Local, deterministic safety boundary for AI-powered automation.
+Description: ActionGuard is an independent, user-controlled safety boundary between AI-powered automation and your machine. It evaluates consequential actions and says Allow / Ask / Deny — and on supported boundaries it enforces that decision before anything happens. Local-first. No account. No cloud telemetry.
+Moniker: actionguard
+Tags:
+  - ai
+  - automation
+  - safety
+  - security
+  - cli
+  - tauri
+ManifestType: defaultLocale
+ManifestVersion: 1.6

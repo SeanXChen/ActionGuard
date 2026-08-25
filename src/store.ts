@@ -49,6 +49,8 @@ interface StoreState {
   pendingApprovals: ApprovalRequest[];
   // v0.2 CLI startup args (--workspace / --observe passed via `actionguard protect`).
   startupArgs: { workspace: string | null; mode: SessionMode } | null;
+  // v0.2 consumer onboarding: first-run experience separate from the dashboard.
+  onboardingDone: boolean;
 }
 
 function emptyPara(): ParaStats {
@@ -62,6 +64,16 @@ function emptyPara(): ParaStats {
     actionsProtected: 0,
     actionsBlocked: 0,
   };
+}
+
+const ONBOARDING_KEY = "actionguard:onboarding:v1";
+
+function readOnboardingDone(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDING_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 const state = reactive<StoreState>({
@@ -82,6 +94,7 @@ const state = reactive<StoreState>({
   ledger: [],
   pendingApprovals: [],
   startupArgs: null,
+  onboardingDone: readOnboardingDone(),
 });
 
 let listening = false;
@@ -254,6 +267,15 @@ export function useStore() {
     state.view = view;
   }
 
+  function completeOnboarding() {
+    state.onboardingDone = true;
+    try {
+      localStorage.setItem(ONBOARDING_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  }
+
   return {
     state: readonly(state),
     init,
@@ -265,5 +287,6 @@ export function useStore() {
     refreshLedger,
     refreshPendingApprovals,
     resolveApproval,
+    completeOnboarding,
   };
 }

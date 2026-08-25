@@ -1,0 +1,20 @@
+# winget manifest — installer.
+#
+# 1. Cut the release (tag v*). The Release workflow produces
+#    ActionGuard_<ver>_x64-setup.exe (NSIS).
+# 2. Fill in InstallerSha256 from the released asset (docs/WINGET.md).
+# 3. Validate locally: winget install --manifest .\scripts\winget
+# 4. Submit to microsoft/winget-pkgs.
+PackageIdentifier: SeanXChen.ActionGuard
+PackageVersion: 0.2.0
+InstallerType: nullsoft
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/SeanXChen/ActionGuard/releases/download/v0.2.0/ActionGuard_0.2.0_x64-setup.exe
+    InstallerSha256: <FILL_AFTER_RELEASE>
+    Scope: user
+    InstallerSwitches:
+      Silent: /S
+      SilentWithProgress: /S
+ManifestType: installer
+ManifestVersion: 1.6

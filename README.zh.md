@@ -321,7 +321,7 @@ ActionGuard 是本地优先的：**产品内没有任何遥测**。作为替代�
 
 ActionGuard 是本地优先的，但我们正在积极探索**团队部署与企业场景**——共享策略、审计友好导出、托管规则包。
 
-如果你在问「这能用在一个团队里吗？」，我们很想听：[发起讨论](https://github.com/SeanXChen/ActionGuard/discussions)或[提交企业咨询 issue](https://github.com/SeanXChen/ActionGuard/issues/new)。这一个信号比十几个 star 更有价值。
+如果你在问「这能用在一个团队里吗？」，我们很想听：[发起讨论](https://github.com/SeanXChen/ActionGuard/discussions)或[提交企业咨询 issue](https://github.com/SeanXChen/ActionGuard/issues/new)。
 
 ---
 

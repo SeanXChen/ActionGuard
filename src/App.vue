@@ -1,455 +1,501 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useStore, type View } from "./store";
-import { LANGS, useI18n, type Lang } from "./i18n";
+import { computed, onMounted, ref, watch } from "vue";
+import { useStore } from "./store";
+import type { View } from "./store";
+import { useI18n } from "./i18n";
 import HomeView from "./views/HomeView.vue";
+import OnboardingView from "./views/OnboardingView.vue";
 import SessionView from "./views/SessionView.vue";
 import ReviewView from "./views/ReviewView.vue";
 import HistoryView from "./views/HistoryView.vue";
 import ApprovalModal from "./components/ApprovalModal.vue";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 
-const { state, init, navigate } = useStore();
-const { t, setLang, lang, prompted, markPrompted } = useI18n();
+const store = useStore();
+const { state } = store;
+const { t, lang, setLang: _setLang } = useI18n();
+const locale = computed(() => lang.value);
 
-const appWindow = getCurrentWindow();
-const isMaximized = ref(false);
-let resizeUnlisten: (() => void) | null = null;
+const appWindow = WebviewWindow.getCurrent();
 
-onMounted(async () => {
-  await init();
-  try {
-    isMaximized.value = await appWindow.isMaximized();
-    resizeUnlisten = await appWindow.onResized(async () => {
-      isMaximized.value = await appWindow.isMaximized();
-    });
-  } catch {}
-});
+import type { DictKey } from "./i18n";
 
-onBeforeUnmount(() => {
-  if (resizeUnlisten) resizeUnlisten();
-});
+const navItems: { view: View; labelKey: DictKey; icon: string; badge?: () => number }[] = [
+  { view: "home", labelKey: "nav.dashboard", icon: "📊" },
+  { view: "history", labelKey: "nav.activity", icon: "📋" },
+  { view: "review", labelKey: "nav.review", icon: "🔍", badge: () => state.pendingApprovals.length },
+  { view: "session", labelKey: "nav.live", icon: "📡" },
+];
 
-async function minimize() {
-  try { await appWindow.minimize(); } catch {}
-}
-async function toggleMax() {
-  try { await appWindow.toggleMaximize(); } catch {}
-}
-async function closeApp() {
-  try { await appWindow.close(); } catch {}
-}
+const pendingBadge = computed(() => state.pendingApprovals.length);
 
-const tabs = computed(() => {
-  const items: { view: View; labelKey: ViewKeys; icon: string; disabled?: boolean }[] = [
-    { view: "home", labelKey: "home", icon: "home" },
-    { view: "session", labelKey: "monitor", icon: "activity", disabled: !state.session },
-    { view: "review", labelKey: "review", icon: "alert", disabled: !state.pendingBatch },
-    { view: "history", labelKey: "history", icon: "history" },
-  ];
-  return items.map((i) => ({
-    view: i.view,
-    icon: i.icon,
-    label:
-      i.labelKey === "home"
-        ? t("nav.home")
-        : i.labelKey === "monitor"
-        ? t("nav.monitor")
-        : i.labelKey === "review"
-        ? t("nav.review")
-        : t("nav.history"),
-    disabled: i.disabled,
-  }));
-});
-
-type ViewKeys = "home" | "monitor" | "review" | "history";
-
-const navIcons: Record<string, string> = {
-  home: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12L12 3l9 9"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>`,
-  activity: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
-  alert: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-  history: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+const isActive = (v: View) => state.view === v;
+const go = (v: View) => {
+  store.setView(v);
 };
 
-function go(view: View) {
-  if (view === "home") navigate("home", null);
-  else navigate(view);
+const showLang = ref(false);
+function toggleLang() {
+  showLang.value = !showLang.value;
+}
+function setLang(l: "zh" | "en") {
+  _setLang(l);
+  showLang.value = false;
 }
 
-// --- Language prompt modal ---
-const showLangModal = computed(() => !prompted.value);
-const tempLang = ref<Lang>(lang.value);
-
-function previewLang(l: Lang) {
-  tempLang.value = l;
+async function minimize() {
+  await appWindow.minimize();
+}
+async function toggleMaximize() {
+  await appWindow.toggleMaximize();
+}
+async function closeWindow() {
+  await appWindow.close();
 }
 
-function confirmLang() {
-  setLang(tempLang.value);
-  markPrompted();
+async function adjustWindowSize() {
+  const w = 1080;
+  const h = 780;
+  try {
+    await appWindow.setSize(new LogicalSize(w, h));
+  } catch {
+    /* ignore */
+  }
 }
 
-function switchLangQuick(l: Lang) {
-  setLang(l);
+function isLiveDisabled() {
+  return state.view !== "session" && state.session === null;
 }
+
+onMounted(() => {
+  void store.init();
+  void adjustWindowSize();
+});
+
+watch(
+  () => state.session,
+  (s) => {
+    if (s) {
+      void adjustWindowSize();
+    }
+  },
+);
 </script>
 
 <template>
   <div class="app-shell">
-    <!-- ================= Top bar ================= -->
-    <header class="topbar" data-tauri-drag-region>
-      <div class="brand">
-        <span class="logo">◈</span>
-        <span>{{ t("app.name") }}<small>v0.2</small></span>
-        <span class="brand-dot"></span>
-        <span class="brand-sub">{{ t("app.category") }}</span>
-      </div>
-      <nav>
-        <button
-          v-for="(tab, i) in tabs"
-          :key="tab.view + i"
-          :class="{ active: state.view === tab.view }"
-          :disabled="tab.disabled"
-          data-tauri-drag-region="false"
-          @click="go(tab.view)"
-        >
-          <span class="nav-icon" v-html="navIcons[tab.icon]"></span>
-          <span class="nav-label">{{ tab.label }}</span>
-        </button>
-      </nav>
-      <div class="top-right">
-        <div v-if="state.session" class="session-chip">
-          <span class="dot"></span>
-          {{ t("session.chip") }} #{{ state.session.num.toString().padStart(5, "0") }}
-        </div>
-        <div class="lang-switch" :title="t('lang.switch')">
-          <button
-            v-for="l in LANGS"
-            :key="l.id"
-            :class="{ active: lang === l.id }"
-            data-tauri-drag-region="false"
-            @click="switchLangQuick(l.id)"
-          >
-            <span class="flag">{{ l.flag }}</span>
-            <span class="lname">{{ l.label }}</span>
-          </button>
-        </div>
-        <div class="win-controls">
-          <button
-            class="wc"
-            :title="t('win.min')"
-            data-tauri-drag-region="false"
-            @click="minimize"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <line x1="2.5" y1="6" x2="9.5" y2="6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <button
-            class="wc"
-            :title="isMaximized ? t('win.restore') : t('win.max')"
-            data-tauri-drag-region="false"
-            @click="toggleMax"
-          >
-            <svg v-if="isMaximized" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <rect x="3" y="1" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.2" rx="0.5"/>
-              <rect x="1" y="3" width="7" height="7" fill="var(--bg)" stroke="currentColor" stroke-width="1.2" rx="0.5"/>
-            </svg>
-            <svg v-else width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <rect x="2" y="2" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.3" rx="1"/>
-            </svg>
-          </button>
-          <button
-            class="wc wc-close"
-            :title="t('win.close')"
-            data-tauri-drag-region="false"
-            @click="closeApp"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <line x1="3" y1="3" x2="9" y2="9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              <line x1="9" y1="3" x2="3" y2="9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </header>
+    <!-- First-run onboarding -->
+    <OnboardingView
+      v-if="!state.onboardingDone"
+      @done="store.completeOnboarding()"
+    />
 
-    <!-- ================= Main area ================= -->
-    <main class="main">
-      <HomeView v-if="state.view === 'home'" />
-      <SessionView v-else-if="state.view === 'session'" />
-      <ReviewView v-else-if="state.view === 'review'" />
-      <HistoryView v-else />
-    </main>
-
-    <!-- ================= Footer ================= -->
-    <footer class="footer">
-      <div class="f-slogan">{{ t("footer.slogan1") }}</div>
-      <div class="f-meta">
-        <span>{{ t("footer.slogan2") }}</span>
-        <span class="sep">·</span>
-        <span>{{ t("footer.slogan3") }}</span>
-      </div>
-    </footer>
-
-    <!-- ================= Language prompt ================= -->
-    <transition name="fade">
-      <div v-if="showLangModal" class="overlay">
-        <div class="modal">
-          <div class="modal-head">
-            <div class="big-logo">◈</div>
-            <h2>{{ t("lang.modal.title") }}</h2>
-            <p class="m-subtitle">{{ t("lang.modal.subtitle") }}</p>
+    <template v-else>
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="logo">AG</div>
+          <div class="brand-text">
+            <div class="brand-name">ActionGuard</div>
+            <div class="brand-tag">{{ t("brand.tag") }}</div>
           </div>
-          <div class="lang-picks">
-            <button
-              v-for="l in LANGS"
-              :key="l.id"
-              :class="{ active: tempLang === l.id }"
-              @mouseenter="previewLang(l.id)"
-              @click="previewLang(l.id)"
-            >
-              <span class="big-flag">{{ l.flag }}</span>
-              <span class="l-label">{{ l.label }}</span>
-              <span class="check" v-if="tempLang === l.id">✓</span>
-            </button>
-          </div>
-          <button class="btn btn-primary big confirm" @click="confirmLang">
-            {{ t("lang.modal.confirm") }}
-          </button>
         </div>
-      </div>
-    </transition>
 
-    <!-- ================= Approval gate (always-on overlay) ================= -->
-    <ApprovalModal />
+        <nav class="sidebar-nav">
+          <button
+            v-for="item in navItems"
+            :key="item.view"
+            class="nav-item"
+            :class="{ active: isActive(item.view), disabled: item.view === 'session' && isLiveDisabled() }"
+            :disabled="item.view === 'session' && isLiveDisabled()"
+            @click="go(item.view)"
+          >
+            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-label">{{ t(item.labelKey) }}</span>
+            <span v-if="item.badge && item.badge() > 0" class="nav-badge">{{ item.badge() }}</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div v-if="state.session" class="sb-status active">
+            <span class="sb-dot" />
+            <span>{{ t("sidebar.protectionActive") }}</span>
+          </div>
+          <div v-else class="sb-status inactive">
+            <span class="sb-dot" />
+            <span>{{ t("sidebar.protectionInactive") }}</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main area -->
+      <div class="main-area">
+        <!-- Header -->
+        <header class="main-header">
+          <div class="header-left">
+            <h1 class="page-title">
+              <template v-if="state.view === 'home'">{{ t("nav.dashboard") }}</template>
+              <template v-else-if="state.view === 'history'">{{ t("nav.activity") }}</template>
+              <template v-else-if="state.view === 'review'">{{ t("nav.review") }}</template>
+              <template v-else-if="state.view === 'session'">{{ t("nav.live") }}</template>
+            </h1>
+          </div>
+          <div class="header-right">
+            <div class="lang-wrap">
+              <button class="icon-btn" title="Language" @click="toggleLang">
+                🌐
+              </button>
+              <div v-if="showLang" class="lang-dropdown">
+                <button :class="{ active: locale === 'zh' }" @click="setLang('zh')">
+                  中文
+                </button>
+                <button :class="{ active: locale === 'en' }" @click="setLang('en')">
+                  English
+                </button>
+              </div>
+            </div>
+            <div class="win-controls">
+              <button class="wc" @click="minimize">
+                <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0" y="4" width="10" height="2" fill="currentColor"/></svg>
+              </button>
+              <button class="wc" @click="toggleMaximize">
+                <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+              </button>
+              <button class="wc wc-close" @click="closeWindow">
+                <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" stroke-width="1.5"/></svg>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <!-- Content -->
+        <main class="main-content">
+          <Transition name="fade" mode="out-in">
+            <HomeView v-if="state.view === 'home'" />
+            <SessionView v-else-if="state.view === 'session'" />
+            <ReviewView v-else-if="state.view === 'review'" />
+            <HistoryView v-else-if="state.view === 'history'" />
+          </Transition>
+        </main>
+      </div>
+    </template>
+
+    <ApprovalModal
+      v-for="req in state.pendingApprovals"
+      :key="req.id"
+      :request="req"
+      @resolve="(d, learn, rule) => store.resolveApproval(req.id, d, learn, rule)"
+    />
   </div>
 </template>
 
 <style scoped>
-.top-right {
+.app-shell {
+  height: 100vh;
+  display: flex;
+  min-height: 0;
+  background: var(--bg);
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-soft);
+  border-right: 1px solid var(--border-soft);
+  padding: 20px 14px 16px;
+}
+
+.sidebar-brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-bottom: 28px;
+  padding: 0 4px;
+  -webkit-app-region: drag;
 }
 
-.brand-sub {
-  font-size: 11px;
-  color: var(--text-faint);
-  letter-spacing: 0.3px;
-  font-weight: 500;
-}
-
-.brand-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--border);
-}
-
-.lang-switch {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-soft);
-}
-
-.lang-switch button {
-  background: transparent;
-  border: 0;
-  color: var(--text-faint);
-  cursor: pointer;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-family: var(--sans);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  transition: all 0.15s;
-}
-
-.lang-switch button:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.lang-switch button.active {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.15));
-  color: var(--green);
-  font-weight: 700;
-}
-
-.lang-switch .flag {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-}
-
-/* ================= Footer ================= */
-.footer {
-  border-top: 1px solid var(--border-soft);
-  background: rgba(11, 18, 32, 0.55);
-  padding: 12px 24px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.f-slogan {
-  font-size: 12.5px;
-  color: var(--text-dim);
-  letter-spacing: 0.2px;
-}
-
-.f-meta {
-  font-size: 11.5px;
-  color: var(--text-faint);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.f-meta .sep {
-  opacity: 0.6;
-}
-
-/* ================= Language prompt ================= */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(4, 8, 16, 0.72);
-  backdrop-filter: blur(10px);
-  display: grid;
-  place-items: center;
-  z-index: 50;
-  padding: 24px;
-}
-
-.modal {
-  width: 100%;
-  max-width: 480px;
-  background: linear-gradient(160deg, var(--bg-card) 0%, var(--bg-soft) 100%);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 28px 30px 26px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  animation: popIn 220ms ease;
-}
-
-@keyframes popIn {
-  from {
-    transform: translateY(6px) scale(0.97);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-}
-
-.modal-head {
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: center;
-}
-
-.modal-head h2 {
-  font-size: 20px;
-}
-
-.modal-head .m-subtitle {
-  color: var(--text-dim);
-  font-size: 13px;
-  max-width: 380px;
-  line-height: 1.5;
-}
-
-.big-logo {
-  width: 58px;
-  height: 58px;
-  border-radius: 16px;
+.sidebar-brand .logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--green-soft), var(--green));
   display: grid;
   place-items: center;
   color: #fff;
-  font-size: 26px;
-  font-weight: 900;
-  margin-bottom: 6px;
-  background: linear-gradient(135deg, #16a34a, #22c55e);
-  box-shadow: 0 12px 32px var(--green-glow);
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 2px 12px var(--green-glow);
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
 }
 
-.lang-picks {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.lang-picks button {
-  position: relative;
-  background: var(--bg-soft);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 14px;
-  padding: 22px 16px;
+.brand-text {
   display: flex;
   flex-direction: column;
+  gap: 1px;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  color: var(--text);
+}
+
+.brand-tag {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+/* ---------- Sidebar Nav ---------- */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--sans);
+  text-align: left;
+  position: relative;
+}
+
+.nav-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.nav-item.active {
+  background: var(--bg-card);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--green);
+}
+
+.nav-item.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.nav-icon {
+  width: 20px;
+  text-align: center;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.nav-item.active .nav-icon {
+  opacity: 1;
+}
+
+.nav-badge {
+  margin-left: auto;
+  background: var(--red-soft);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ---------- Sidebar Footer ---------- */
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.sb-status {
+  display: flex;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
-  font-family: var(--sans);
-  transition: all 0.15s ease;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
 }
 
-.lang-picks button:hover {
-  border-color: var(--green);
-  background: rgba(34, 197, 94, 0.08);
-  transform: translateY(-1px);
-}
-
-.lang-picks button.active {
-  border-color: var(--green);
-  background: linear-gradient(180deg, rgba(34, 197, 94, 0.14), rgba(22, 163, 74, 0.06));
-  box-shadow: 0 0 0 1px var(--green-soft) inset;
-}
-
-.lang-picks .big-flag {
-  font-size: 30px;
-  font-weight: 900;
-  letter-spacing: 1px;
-  line-height: 1;
+.sb-status.active {
   color: var(--green);
+  background: rgba(34, 197, 94, 0.08);
 }
 
-.lang-picks .l-label {
-  font-size: 14px;
+.sb-status.inactive {
+  color: var(--text-faint);
+  background: var(--bg-card);
+}
+
+.sb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sb-status.active .sb-dot {
+  background: var(--green);
+  animation: pulse 1.6s infinite;
+}
+
+.sb-status.inactive .sb-dot {
+  background: var(--text-faint);
+}
+
+/* ---------- Main Area ---------- */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.main-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px 0 24px;
+  border-bottom: 1px solid var(--border-soft);
+  background: rgba(11, 18, 32, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.header-left,
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.page-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: all 0.15s;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.lang-wrap {
+  position: relative;
+}
+
+.lang-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 110px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 100;
+}
+
+.lang-dropdown button {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  font-family: var(--sans);
+  transition: all 0.12s;
+}
+
+.lang-dropdown button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.lang-dropdown button.active {
+  color: var(--green);
   font-weight: 600;
 }
 
-.lang-picks .check {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  color: var(--green);
-  font-weight: 800;
-  font-size: 13px;
+.win-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  border-left: 1px solid var(--border-soft);
+  padding-left: 8px;
 }
 
-.confirm {
-  align-self: center;
-  min-width: 180px;
+.win-controls .wc {
+  width: 34px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
 }
 
-.big {
-  padding: 12px 22px;
-  font-size: 14px;
+.win-controls .wc:hover {
+  color: var(--text);
+  background: var(--bg-card);
+}
+
+.win-controls .wc-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.main-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 28px 32px;
 }
 </style>

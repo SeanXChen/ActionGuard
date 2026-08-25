@@ -1,0 +1,103 @@
+# Release pipeline.
+#
+# On a `v*` tag, builds installers for Windows (MSI + NSIS), macOS (app + dmg)
+# and Linux (deb + AppImage), attaches them to a GitHub **draft** release, and
+# generates a SHA256SUMS file from the exact released assets.
+#
+# Installer signing is intentionally NOT configured yet. Un-signed Windows
+# installers trigger a SmartScreen warning on first run — that is expected and
+# documented (docs/WINGET.md). Never advertise `curl | sh`: ActionGuard is a
+# security product and the install path must be Download -> Verify -> Install.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            bundles: msi,nsis
+          - platform: macos-latest
+            bundles: app,dmg
+          - platform: ubuntu-latest
+            bundles: deb,appimage
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies (Tauri)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev \
+            libxdo-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Frontend build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build and upload installer to draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "ActionGuard ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          args: --bundles ${{ matrix.bundles }}
+
+  checksums:
+    name: Generate SHA256SUMS from release assets
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p assets
+          gh release download "${{ github.ref_name }}" --dir assets
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd assets
+          sha256sum * | sort -k2 > ../SHA256SUMS
+          cat ../SHA256SUMS
+
+      - name: Upload checksum file to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" SHA256SUMS --clobber
