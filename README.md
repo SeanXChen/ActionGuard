@@ -161,7 +161,13 @@ These are the **current v0.2 action classes**, enforced locally and recorded in 
 
 > **Local-first. No account. No cloud telemetry.** Everything stays on your machine — nothing phones home.
 
-**30 seconds, no Rust toolchain required** — download the binary from **GitHub Releases** (checksums in `SHA256SUMS`).
+**30 seconds, no Rust toolchain required** — install from **GitHub Releases**:
+
+1. **Download** the installer for your OS (`ActionGuard_0.2.0_x64-setup.exe` on Windows).
+2. **Verify** it against the `SHA256SUMS` file in the same release.
+3. **Install**, open the app, and click **Protect this computer**.
+
+`winget install` is on the roadmap — see [`docs/WINGET.md`](./docs/WINGET.md).
 
 **For developers — the CLI:**
 
@@ -223,6 +229,26 @@ That is the whole loop: an action arrives, ActionGuard decides, the ledger recor
 | Manus Cloud | N/A — remote, out of scope |
 
 `Enforced` means the action is gated **before** it executes. `Observe-only` means it is recorded but not blocked — and it is labeled exactly that, never implied as protection. Platform status (Windows / Linux / macOS) is in [BOUNDARIES.md](./BOUNDARIES.md).
+
+---
+
+## Can you break ActionGuard?
+
+Every "Verified today" line above is a claim — and claims are meant to be
+tested. Find a **new** way to bypass an enforced boundary that is not already
+documented in [`SECURITY_MODEL.md`](./SECURITY_MODEL.md)? Report it and you get
+credited.
+
+- Report **privately** via GitHub Private vulnerability reporting
+  ([`SECURITY.md`](./SECURITY.md)) — never a public issue.
+- Every accepted report is credited in the advisory and changelog, unless you
+  prefer to stay anonymous.
+- The honest list of known limitations (subprocess / absolute-path execution)
+  is **not** a vulnerability — it is documented and observable with
+  `actionguard doctor`. New, undocumented bypasses are in scope.
+
+No bounty program yet — this is a small project. Credit, a changelog entry,
+and a thank-you in the next release notes. If you want, we fix it together.
 
 ---
 
