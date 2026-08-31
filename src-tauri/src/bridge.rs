@@ -99,9 +99,9 @@ impl Bridge {
 
         // Persist hook descriptor so shells spawned later can find us.
         storage::write_hook_file(&session_id, port, &secret)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         storage::point_current_hook(&session_id)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
 
         let secret_clone = secret.clone();
         let session_id_clone = session_id.clone();
@@ -348,7 +348,7 @@ fn handle_preexec(
             }
         }
         // Notify the frontend. The ApprovalModal subscribes to this event.
-        let _ = app.emit("actionguard://approval/request", req);
+        app.emit("actionguard://approval/request", req);
 
         // Block until the user resolves or the timeout fires. The bridge
         // worker thread is per-request so this doesn't stall other shells.
@@ -531,7 +531,7 @@ fn handle_resolve(
         decision,
         learn_rule: None,
     };
-    let _ = app.emit("actionguard://approval/resolved", payload);
+    app.emit("actionguard://approval/resolved", payload);
 
     write_json(
         stream,

@@ -26,6 +26,38 @@ Action Source → Boundary → ActionGuard Core → Classify → Policy → Deci
              → Approval → Evidence (ledger)
 ```
 
+## Generic Boundary First, Vendor Adapter Second
+
+The product follows this principle in all decisions:
+
+**Priority Ladder (highest → lowest quality):**
+
+| Priority | Boundary | Enforcement quality |
+|---|---|---|
+| A | Tool Hook (dedicated adapter) | Highest — pre-action, enforced |
+| B | Exec Approval (automation's own boundary) | High — when available |
+| C | Protected Shell | Generic — catches all shell-based actions |
+| D | Runtime / OS Enforcement | Future (L3/L4) |
+| F | Observe-only | When no pre-action boundary exists |
+
+**The key insight**: Hooks are a bonus, not a prerequisite. Every AI tool that uses a shell is protected by the Protected Shell boundary — even if it has no dedicated adapter. Unknown AI apps without a hook automatically fall back to the generic shell boundary.
+
+```
+AI App (with hook)
+      │
+      ├── Dedicated hook adapter → Enforced (highest quality)
+      │
+AI App (unknown, no hook)
+      │
+      └── Protected Shell → Generic fallback (generic quality)
+
+Both paths → ActionGuard Core → Allow / Ask / Deny
+```
+
+Never design features that require users to specify which AI tool they're using. The Coverage Ladder shows the user their protection level without asking.
+
+## Boundary model
+
 The core safety invariant — using the project's own vocabulary
 (see `SECURITY_MODEL.md`):
 
@@ -84,7 +116,7 @@ Do not weaken these defaults without an explicit security review:
 - **Secrets must not be written to logs.**
 - **Sensitive paths must not be exposed unnecessarily.**
 
-## Current v0.2 scope
+## Current v0.3 scope
 
 Action categories (`ActionCategory` in `src-tauri/src/models.rs`):
 

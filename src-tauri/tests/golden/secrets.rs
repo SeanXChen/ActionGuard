@@ -1,4 +1,4 @@
-//! secrets.yml 黄金回归用例（19 条规则）。
+//! secrets.yml 黄金回归用例（19 条规则 + P1 扩展）。
 //! 本套件如实断言当前行为——包括两处已知缺陷（见 Backlog B013 / B014），
 //! 修复它们时这里必须同步更新。
 
@@ -81,73 +81,79 @@ fn deletes_of_private_keys_are_denied() {
 
 #[test]
 fn reading_env_exposes_secrets_asks() {
+    // P1: read-* rules come before confirm-* in secrets.yml — they match first.
     assert_decision!(
         decide_cmd("cat .env"),
         Decision::Ask,
-        "confirm-cat-env",
+        "read-env-file",
         RiskLevel::Critical
     );
-    // 已知缺陷 B013：confirm-cat-env-prod / confirm-cat-env-local 被
-    // confirm-cat-env 遮蔽（first-match-wins），这里如实锁定当前行为。
+    // 已知缺陷 B013：read-env-prod / read-env-local 被 read-env-file 遮蔽
+    //（first-match-wins），这里如实锁定当前行为。
     assert_decision!(
         decide_cmd("cat .env.production"),
         Decision::Ask,
-        "confirm-cat-env",
+        "read-env-file",
         RiskLevel::Critical
     );
     assert_decision!(
         decide_cmd("cat .env.local"),
         Decision::Ask,
-        "confirm-cat-env",
+        "read-env-file",
         RiskLevel::Critical
     );
 }
 
 #[test]
 fn reading_keys_and_credentials_asks() {
+    // P1: read-* rules match first; more specific rules (ssh, env, etc.) take precedence.
     assert_decision!(
         decide_cmd("cat server.pem"),
         Decision::Ask,
-        "confirm-cat-pem",
+        "read-pem-key",
         RiskLevel::Critical
     );
     assert_decision!(
         decide_cmd("cat tls.key"),
         Decision::Ask,
-        "confirm-cat-key",
+        "read-private-key",
         RiskLevel::Critical
     );
     assert_decision!(
         decide_cmd("cat ~/.ssh/id_rsa"),
         Decision::Ask,
-        "confirm-cat-id-rsa",
+        "read-ssh-private-key",
         RiskLevel::Critical
     );
     assert_decision!(
         decide_cmd("cat ~/.ssh/id_ed25519"),
         Decision::Ask,
-        "confirm-cat-id-ed25519",
+        "read-ssh-ed25519-key",
         RiskLevel::Critical
     );
     assert_decision!(
         decide_cmd("cat credentials.json"),
         Decision::Ask,
-        "confirm-cat-credentials-json",
+        "read-credentials-json",
         RiskLevel::Critical
     );
     assert_decision!(
         decide_cmd("cat credentials.yml"),
         Decision::Ask,
-        "confirm-cat-credentials-yml",
+        "read-credentials-yml",
         RiskLevel::Critical
     );
 }
 
 #[test]
-fn reading_aws_credentials_is_uncovered_today() {
-    // 已知缺口 B014：写 .aws/credentials 被 deny-write-aws-creds 拦，
-    // 但 `cat ~/.aws/credentials` 没有任何 confirm-cat-* 覆盖 → 回退放行。
-    assert_fallback_allow!(decide_cmd("cat ~/.aws/credentials"));
+fn reading_aws_credentials_is_covered() {
+    // P1: read-aws-credentials rule covers cat ~/.aws/credentials — B014 is fixed.
+    assert_decision!(
+        decide_cmd("cat ~/.aws/credentials"),
+        Decision::Ask,
+        "read-aws-credentials",
+        RiskLevel::Critical
+    );
 }
 
 #[test]

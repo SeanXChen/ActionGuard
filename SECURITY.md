@@ -21,7 +21,7 @@ Please use **GitHub Private vulnerability reporting**:
 2. Click **Report a vulnerability** (or use the private advisory form at `https://github.com/<OWNER>/<REPO>/security/advisories/new`).
 3. Provide:
 
-   - Affected version (e.g. `actionguard 0.2.0`)
+   - Affected version (e.g. `actionguard 0.3.0`)
    - Operating system and shell
    - Steps to reproduce (exact commands)
    - Expected behavior

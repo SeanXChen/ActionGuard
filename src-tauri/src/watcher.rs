@@ -83,8 +83,6 @@ fn normalize(event: &Event, workspace: &Path, cfg: &AppConfig, detect_outside: b
                         } else {
                             FsEventKind::Create
                         }
-                    } else if event.paths.len() >= 2 && event.paths[1] == path {
-                        FsEventKind::Create
                     } else {
                         FsEventKind::Create
                     }

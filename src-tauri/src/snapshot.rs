@@ -180,10 +180,9 @@ pub fn restore_snapshot(
     // Remove new dirs deepest-first so parents become empty before removal.
     remove_dirs.sort_by_key(|p| std::cmp::Reverse(p.components().count()));
     for d in remove_dirs {
-        match fs::remove_dir(&d) {
-            Ok(_) => result.removed_dirs += 1,
-            Err(_) => {} // not empty or in use — leave it
-        }
+        if fs::remove_dir(&d).is_ok() {
+            result.removed_dirs += 1;
+        } // not empty or in use — leave it
     }
 
     Ok(result)

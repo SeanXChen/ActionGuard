@@ -18,10 +18,89 @@ export type RiskLevel = "low" | "medium" | "high" | "critical";
 
 export interface RiskResult {
   level: RiskLevel;
-  reasons: string[];
-  sensitive: string[];
-  outside: string[];
+  reasons: readonly string[];
+  sensitive: readonly string[];
+  outside: readonly string[];
   asset?: Asset | null;
+}
+
+// ===========================================================================
+// v0.3 — Contextual Facts Schema 2.0
+// ===========================================================================
+
+/** What class of resource an action targets — drives semantic policy rules. */
+export type TargetClass =
+  | "source_code"
+  | "credential"
+  | "system_secret"
+  | "config"
+  | "build_artifact"
+  | "package_manifest"
+  | "git_repo"
+  | "user_data"
+  | "external_resource"
+  | "network_endpoint"
+  | "unknown";
+
+/** Who owns the resource being accessed. */
+export type Ownership = "self" | "third_party" | "shared" | "unknown";
+
+/** Where the action has effect. */
+export type Externality = "local" | "third_party" | "public" | "external_system";
+
+/** Side effects an action may produce. */
+export type SideEffect =
+  | "none"
+  | "destructive"
+  | "irreversible"
+  | "third_party_impact"
+  | "external_call"
+  | "system_modification"
+  | "publication";
+
+/** Whether an action's effects can be reversed. */
+export type Reversibility = "reversible" | "difficult" | "irreversible" | "unknown";
+
+/** How sensitive a resource or action is. */
+export type SensitivityLevel = "low" | "medium" | "high" | "critical";
+
+/** v0.3 — The consequence dimension of an action. */
+export interface Consequence {
+  side_effect?: SideEffect;
+  externality?: Externality;
+  reversibility?: Reversibility;
+  is_chain_link?: boolean;
+}
+
+/** v0.3 — Target context. */
+export interface TargetContext {
+  class?: TargetClass;
+  sensitivity?: SensitivityLevel;
+  ownership?: Ownership;
+  ownership_note?: string;
+}
+
+/** v0.3 — Provenance: where an action came from. */
+export interface Provenance {
+  boundary?: string;
+  confidence?: "verified" | "inferred" | "heuristic";
+  observed_at?: string;
+}
+
+/** v0.3 — Type of detected action chain. */
+export type ActionChainType =
+  | "credential_access"
+  | "credential_collection"
+  | "exfiltration"
+  | "privilege_escalation"
+  | "destructive_cascade"
+  | "other";
+
+/** v0.3 — Action correlation: links actions into sequences and chains. */
+export interface ActionCorrelation {
+  related_actions?: readonly string[];
+  chain_type?: ActionChainType;
+  chain_description?: string;
 }
 
 // ===========================================================================
@@ -41,15 +120,15 @@ export type AssetKind =
 export interface Asset {
   kind: AssetKind;
   matched_pattern: string;
-  contains?: string[];
+  contains?: readonly string[];
   absolute_path?: string | null;
 }
 
 export interface Evidence {
-  packages_added?: string[];
+  packages_added?: readonly string[];
   lockfile_modified?: boolean;
-  lockfile_diff?: string[];
-  contains_keys?: string[];
+  lockfile_diff?: readonly string[];
+  contains_keys?: readonly string[];
   install_size_bytes?: number;
   global?: boolean;
 }
@@ -72,12 +151,27 @@ export interface Action {
   outside?: boolean;
   from?: string | null;
   risk?: RiskLevel | null;
-  reasons?: string[];
+  reasons?: readonly string[];
   matched_rule?: string | null;
   decision?: Decision | null;
   result?: string | null;
   asset?: Asset | null;
   evidence?: Evidence | null;
+  // v0.2: data classification
+  data_class?: string;
+  credential_type?: string;
+  // v0.3: contextual facts
+  target_class?: TargetClass;
+  target_sensitivity?: SensitivityLevel;
+  ownership?: Ownership;
+  externality?: Externality;
+  side_effect?: SideEffect;
+  reversibility?: Reversibility;
+  consequence?: Consequence;
+  target_context?: TargetContext;
+  provenance?: Provenance;
+  correlation?: ActionCorrelation;
+  parent_action?: string;
 }
 
 /** v0.1 backward-compat alias. */
@@ -136,6 +230,9 @@ export type SessionStatus = "active" | "completed" | "denied";
 /// v0.2 Mode A/B: Observe = record only, Protected = block high-risk.
 export type SessionMode = "observe" | "protected";
 
+/** v0.3 — Confidence level of a detection. */
+export type ProvenanceConfidence = "verified" | "inferred" | "heuristic";
+
 export interface SessionInfo {
   id: string;
   num: number;
@@ -167,6 +264,18 @@ export interface SessionSummary {
   mode?: SessionMode;
   // --- v0.3 additive ---
   enforcement_counts?: EnforcementCounts;
+  // --- P1: credential exfiltration chain detection ---
+  credential_sources_touched?: number;
+  credential_types?: readonly string[];
+  chain_detected?: boolean;
+  // --- v0.3: Contextual Session Risk ---
+  target_classes_touched?: number;
+  target_class_types?: readonly string[];
+  max_sensitivity?: SensitivityLevel;
+  destructive_actions?: number;
+  irreversible_actions?: number;
+  third_party_actions?: number;
+  detected_chains?: readonly ActionChainType[];
 }
 
 export interface SessionDetails {
@@ -217,9 +326,21 @@ export interface LedgerEntry {
   risk: RiskLevel;
   decision: Decision;
   result: string;
-  reasons: string[];
+  reasons: readonly string[];
   asset?: Asset | null;
   evidence?: Evidence | null;
+  // v0.2: data classification
+  data_class?: string;
+  credential_type?: string;
+  // v0.3: chain detection
+  chain_tag?: string;
+  // v0.3: contextual facts
+  target_class?: TargetClass;
+  target_sensitivity?: SensitivityLevel;
+  ownership?: Ownership;
+  externality?: Externality;
+  side_effect?: SideEffect;
+  correlation?: ActionCorrelation;
 }
 
 export interface ActiveStatsPayload {
@@ -294,4 +415,22 @@ export interface ExecutionPath {
   note: string;
   /** v0.3 — tier implied by observe/block; null = not covered. */
   tier: CapabilityTier | null;
+}
+
+/** Coverage item from `get_coverage`. */
+export interface CoverageItem {
+  name: string;
+  status: "enforced" | "observe" | "inactive" | "not_detected";
+  kind: string;
+  note: string;
+  quality: "high" | "generic" | "observe_only" | "none";
+}
+
+export interface CoveragePayload {
+  items: CoverageItem[];
+  enforced_count: number;
+  observe_count: number;
+  inactive_count: number;
+  not_detected_count: number;
+  has_generic_shell: boolean;
 }

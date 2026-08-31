@@ -181,10 +181,8 @@ pub fn run_doctor(run_test: bool) -> i32 {
     println!("  {status}");
     println!();
 
-    if run_test {
-        if !test_pass {
-            return 1;
-        }
+    if run_test && !test_pass {
+        return 1;
     }
     if status == "PROTECTED" {
         0
@@ -283,7 +281,7 @@ fn remote_deny_check() -> Result<Vec<String>, String> {
         .map_err(|e| format!("bad bridge response: {e}"))?;
     let decision = v.get("decision").and_then(|d| d.as_str()).unwrap_or("unknown");
     let mut lines = vec![
-        format!("  ✓ Action reached boundary: bridge /preexec accepted"),
+        "  ✓ Action reached boundary: bridge /preexec accepted".to_string(),
         format!("  ✓ Policy returned:         {decision}"),
     ];
     if decision == "deny" {

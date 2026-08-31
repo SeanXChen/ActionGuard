@@ -1,6 +1,6 @@
-# User Validation — v0.2
+# User Validation — v0.3
 
-> **Purpose.** v0.2 is released. The question is no longer "what features can we add" but **"does anyone actually hit a real problem, and where do users drop off?"** This document is the single place to track that evidence. It is a living table — update it when a signal changes, not when the mood strikes.
+> **Purpose.** v0.3 is released. The question is no longer "what features can we add" but **"does anyone actually hit a real problem, and where do users drop off?"** This document is the single place to track that evidence. It is a living table — update it when a signal changes, not when the mood strikes.
 >
 > **How data gets collected.** No telemetry is built into the product (local-first is a core promise). Signals come from:
 >

@@ -4,7 +4,7 @@ use crate::models::{
     PolicyFile, RiskCounts, RiskLevel, Rule, SessionDetails, SessionStatus, SessionSummary,
     UndoResult,
 };
-use crate::{bridge, policy, risk, shell_hooks, snapshot, storage, terminal, watcher};
+use crate::{bridge, correlation, policy, risk, shell_hooks, snapshot, storage, terminal, watcher};
 use anyhow::Result;
 use chrono::Local;
 use serde::Serialize;
@@ -155,6 +155,48 @@ pub(crate) fn classify_action(state: &Arc<AppState>, action: &mut Action) {
     if decision.risk > action.risk.unwrap_or(RiskLevel::Low) {
         action.risk = Some(decision.risk);
     }
+
+    // 3) Populate data_class from the matched rule ID prefix.
+    //    This drives credential exfiltration chain detection:
+    //    SessionSummary.credential_types is derived from Action.data_class.
+    if let Some(rule_id) = &action.matched_rule {
+        use crate::models::DataClass;
+        let id = rule_id.as_str();
+        if id.starts_with("read-") || id.starts_with("deny-write-") || id.contains("env") || id.contains("pem") || id.contains("key") {
+            let target = action.target_str();
+            if target.contains("history") || target.contains("ConsoleHost") {
+                action.data_class = Some(DataClass::ShellHistory);
+                action.credential_type = Some("shell_history".to_string());
+            } else if target.contains(".ssh") || id.contains("ssh") {
+                action.data_class = Some(DataClass::Credential);
+                action.credential_type = Some("ssh_private_key".to_string());
+            } else if target.contains(".aws") || id.contains("aws") {
+                action.data_class = Some(DataClass::Credential);
+                action.credential_type = Some("aws_credentials".to_string());
+            } else if target.contains("gcloud") || target.contains("application_default") || target.contains(".azure") {
+                action.data_class = Some(DataClass::Credential);
+                action.credential_type = Some("cloud_creds".to_string());
+            } else if target.contains(".git-credentials") || target.contains(".netrc") || target.contains(".gitconfig") {
+                action.data_class = Some(DataClass::Credential);
+                action.credential_type = Some("git_credentials".to_string());
+            } else if target.contains(".env") || id.contains("env") {
+                action.data_class = Some(DataClass::Credential);
+                action.credential_type = Some("api_token".to_string());
+            } else {
+                action.data_class = Some(DataClass::Credential);
+                action.credential_type = Some("credential".to_string());
+            }
+        } else if id.starts_with("archive-") || id.starts_with("zip-") {
+            action.data_class = Some(DataClass::Credential);
+            action.credential_type = Some("credential_archive".to_string());
+        }
+    }
+
+    // 4) v0.3 — Classify contextual facts: target class, sensitivity,
+    //    ownership, externality, side effects, reversibility.
+    //    This runs after the base classification so it has access to
+    //    `asset`, `data_class`, and all other populated fields.
+    risk::classify_context(action);
 }
 
 /// Bump the live session counters for an action. Call after the final
@@ -186,6 +228,36 @@ pub(crate) fn bump_counters(state: &Arc<AppState>, action: &Action) {
 fn classify_ingested(state: &Arc<AppState>, action: &mut Action) {
     classify_action(state, action);
     bump_counters(state, action);
+}
+
+/// v0.3 — Run contextual classification and correlation detection on an action.
+///
+/// This is called **after** `classify_action` (risk + policy) and **before**
+/// the action is pushed to the ledger. It needs the session lock to access the
+/// action history for correlation detection.
+///
+/// - `classify_context()`: stamps target_class, sensitivity, ownership,
+///   externality, side_effect, reversibility on the action.
+/// - `detect_correlation()`: checks the last N actions for chain patterns
+///   (credential access → collection → exfiltration, destructive cascade, etc.)
+///   and stamps `action.correlation` if a pattern is found.
+///
+/// Both functions are deterministic and have no side effects.
+fn finalize_action_context(state: &Arc<AppState>, action: &mut Action) {
+    // classify_context already ran inside classify_action.
+    // Now detect correlation using the session's action history.
+
+    let prior_actions: Vec<Action> = {
+        let guard = state.session.lock().unwrap();
+        guard
+            .as_ref()
+            .map(|s| s.actions.clone())
+            .unwrap_or_default()
+    };
+
+    if let Some(corr) = correlation::detect_correlation(action, &prior_actions) {
+        action.correlation = Some(corr);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +318,10 @@ fn handle_event(state: &Arc<AppState>, ev: watcher::FsEvent) {
     push_action(state, c);
 }
 
-pub(crate) fn push_action(state: &Arc<AppState>, change: Action) {
+pub(crate) fn push_action(state: &Arc<AppState>, mut change: Action) {
+    // v0.3 — Run contextual classification + correlation detection before recording.
+    finalize_action_context(state, &mut change);
+
     let mut guard = state.session.lock().unwrap();
     let Some(s) = guard.as_mut() else { return };
     // File actions dedupe on (action_kind, path) so a flurry of MODIFY
@@ -291,12 +366,9 @@ fn finalize_batch(state: &Arc<AppState>, app: &AppHandle) {
 
     emit(app, "actionguard://batch", batch_data.clone());
     if batch_data.risk.level == RiskLevel::High {
-        state
-            .session
-            .lock()
-            .unwrap()
-            .as_mut()
-            .map(|s| s.awaiting_review = true);
+        if let Some(s) = state.session.lock().unwrap().as_mut() {
+            s.awaiting_review = true;
+        }
         emit(app, "actionguard://risk", batch_data);
     }
 }
@@ -421,12 +493,79 @@ fn finalize_session(
 
         let mut sensitive_count = 0u32;
         let mut outside_count = 0u32;
+        let mut credential_sources_touched: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         for a in &s.actions {
             if a.sensitive {
                 sensitive_count += 1;
             }
             if a.outside {
                 outside_count += 1;
+            }
+            // P1: credential exfiltration chain detection.
+            // Count distinct credential types accessed in this session.
+            if let Some(ct) = &a.credential_type {
+                credential_sources_touched.insert(ct.clone());
+            }
+        }
+
+        // P1: chain detection heuristic — credential access(s) + archive + outbound attempt
+        let cred_count = credential_sources_touched.len() as u32;
+        let has_archive = s.actions.iter().any(|a| {
+            a.matched_rule
+                .as_ref()
+                .map(|r| r.starts_with("archive-") || r.starts_with("zip-"))
+                .unwrap_or(false)
+        });
+        let has_outbound = s.actions.iter().any(|a| {
+            a.matched_rule
+                .as_ref()
+                .map(|r| r.starts_with("curl-") || r.starts_with("wget-") || r.starts_with("nc-"))
+                .unwrap_or(false)
+        });
+        let chain_detected = cred_count >= 2 && (has_archive || has_outbound);
+
+        // --- v0.3: Compute real Contextual Session Risk stats ---
+        use crate::models::{ActionChainType, SensitivityLevel, SideEffect};
+        let mut target_classes: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        let mut max_sensitivity = SensitivityLevel::Low;
+        let mut destructive_count = 0u32;
+        let mut irreversible_count = 0u32;
+        let mut third_party_count = 0u32;
+        let mut detected_chain_types: std::collections::HashSet<ActionChainType> =
+            std::collections::HashSet::new();
+
+        for a in &s.actions {
+            // Target class tracking
+            if let Some(tc) = a.target_class {
+                let name = tc.as_str().to_string();
+                target_classes.insert(name.clone());
+            }
+            // Max sensitivity
+            if a.target_sensitivity > max_sensitivity {
+                max_sensitivity = a.target_sensitivity;
+            }
+            // Side effect counts
+            match a.side_effect {
+                Some(SideEffect::Destructive) | Some(SideEffect::ThirdPartyImpact) => {
+                    destructive_count += 1;
+                }
+                Some(SideEffect::Irreversible) => {
+                    irreversible_count += 1;
+                    destructive_count += 1;
+                }
+                _ => {}
+            }
+            // Third-party ownership
+            if a.ownership == Some(crate::models::Ownership::ThirdParty) {
+                third_party_count += 1;
+            }
+            // Detected chains
+            if let Some(ref corr) = a.correlation {
+                if let Some(ct) = corr.chain_type {
+                    detected_chain_types.insert(ct);
+                }
             }
         }
 
@@ -455,6 +594,18 @@ fn finalize_session(
             // v0.2 — user behavior (approval popups / overrides)
             popups: s.popups,
             overrides: s.overrides,
+            // P1: credential exfiltration chain detection
+            credential_sources_touched: cred_count,
+            credential_types: credential_sources_touched.into_iter().collect(),
+            chain_detected,
+            // --- v0.3: Contextual Session Risk (computed from real data) ---
+            target_classes_touched: target_classes.len() as u32,
+            target_class_types: target_classes.into_iter().collect(),
+            max_sensitivity,
+            destructive_actions: destructive_count,
+            irreversible_actions: irreversible_count,
+            third_party_actions: third_party_count,
+            detected_chains: detected_chain_types.into_iter().collect(),
         };
         (summary, s.actions.clone(), s.id.clone())
     };
@@ -667,7 +818,16 @@ pub async fn deny_batch(
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
 
-    finalize_session(&app, &state.inner(), SessionStatus::Denied, true).map_err(|e| e.to_string())
+    let app2 = app.clone();
+    let state_ptr = state.inner().clone();
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        finalize_session(&app2, &state_ptr, SessionStatus::Denied, true)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    emit(&app, "actionguard://ended", summary.clone());
+    Ok(summary)
 }
 
 #[tauri::command]
@@ -675,8 +835,16 @@ pub async fn stop_session(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<SessionSummary, String> {
-    finalize_session(&app, &state.inner(), SessionStatus::Completed, false)
-        .map_err(|e| e.to_string())
+    let app2 = app.clone();
+    let state_ptr = state.inner().clone();
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        finalize_session(&app2, &state_ptr, SessionStatus::Completed, false)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    emit(&app, "actionguard://ended", summary.clone());
+    Ok(summary)
 }
 
 /// Undo the currently active session: restore the snapshot taken at session
@@ -697,8 +865,16 @@ pub async fn undo_active_session(
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
 
-    finalize_session(&app, &state.inner(), SessionStatus::Completed, true)
-        .map_err(|e| e.to_string())
+    let app2 = app.clone();
+    let state_ptr = state.inner().clone();
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        finalize_session(&app2, &state_ptr, SessionStatus::Completed, true)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    emit(&app, "actionguard://ended", summary.clone());
+    Ok(summary)
 }
 
 #[tauri::command]
@@ -725,13 +901,17 @@ pub async fn undo_session(
 }
 
 #[tauri::command]
-pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
-    storage::list_sessions().map_err(|e| e.to_string())
+pub async fn list_sessions() -> Result<Vec<SessionSummary>, String> {
+    tauri::async_runtime::spawn_blocking(|| storage::list_sessions().map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn get_session(session_id: String) -> Result<SessionDetails, String> {
-    storage::load_session_details(&session_id).map_err(|e| e.to_string())
+pub async fn get_session(session_id: String) -> Result<SessionDetails, String> {
+    tauri::async_runtime::spawn_blocking(move || storage::load_session_details(&session_id).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -798,6 +978,13 @@ fn to_ledger_entry(a: &Action) -> LedgerEntry {
         reasons: a.reasons.clone(),
         asset: a.asset.clone(),
         evidence: a.evidence.clone(),
+        // P1: data class / credential type (populated by classify_action)
+        data_class: a.data_class,
+        credential_type: a.credential_type.clone(),
+        // v0.3: chain tag derived from action correlation
+        chain_tag: a.correlation.as_ref().and_then(|c| {
+            c.chain_type.map(|ct| ct.as_str().to_string())
+        }),
     }
 }
 
@@ -849,19 +1036,21 @@ pub fn get_active_stats(
 /// Read the per-session Action Ledger. When `session_id` is omitted, defaults
 /// to the active session. `category` / `risk` / `limit` are optional filters.
 #[tauri::command]
-pub fn get_ledger(
+pub async fn get_ledger(
     state: State<'_, Arc<AppState>>,
     session_id: Option<String>,
     category: Option<ActionCategory>,
     risk: Option<RiskLevel>,
     limit: Option<usize>,
 ) -> Result<Vec<LedgerEntry>, String> {
-    let id = match session_id {
-        Some(id) => id,
-        None => {
-            let guard = state.session.lock().unwrap();
-            let s = guard.as_ref().ok_or("No active session")?;
-            s.id.clone()
+    let id = {
+        let guard = state.session.lock().unwrap();
+        match session_id {
+            Some(id) => id,
+            None => {
+                let s = guard.as_ref().ok_or("No active session")?;
+                s.id.clone()
+            }
         }
     };
     let filter = storage::LedgerFilter {
@@ -869,8 +1058,12 @@ pub fn get_ledger(
         risk,
         limit,
     };
-    let actions = storage::load_ledger(&id, &filter);
-    Ok(actions.iter().map(to_ledger_entry).collect())
+    let entries = tauri::async_runtime::spawn_blocking(move || {
+        storage::load_ledger(&id, &filter)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(entries.iter().map(to_ledger_entry).collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -1078,6 +1271,108 @@ pub struct ExecutionPathDto {
     pub note: &'static str,
     /// v0.3 — capability tier implied by observe/block (None = not covered).
     pub tier: Option<CapabilityTier>,
+}
+
+/// Coverage item for the GUI dashboard.
+#[derive(Serialize, Clone)]
+pub struct CoverageItem {
+    pub name: String,
+    pub status: String,   // "enforced" | "observe" | "inactive" | "not_detected"
+    pub kind: String,     // "tool_hook" | "protected_shell" | "exec_approval" | "unknown"
+    pub note: String,
+    pub quality: String,  // "high" | "generic" | "observe_only"
+}
+
+#[derive(Serialize, Clone)]
+pub struct CoveragePayload {
+    pub items: Vec<CoverageItem>,
+    pub enforced_count: usize,
+    pub observe_count: usize,
+    pub inactive_count: usize,
+    pub not_detected_count: usize,
+    pub has_generic_shell: bool,
+}
+
+#[tauri::command]
+pub async fn get_coverage() -> Result<CoveragePayload, String> {
+    tauri::async_runtime::spawn_blocking(get_coverage_blocking)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn get_coverage_blocking() -> Result<CoveragePayload, String> {
+    use crate::models::BoundaryKind;
+    let boundaries = crate::boundary::detect_boundaries_cached();
+
+    let mut enforced_count = 0usize;
+    let mut observe_count = 0usize;
+    let mut inactive_count = 0usize;
+    let mut not_detected_count = 0usize;
+    let mut has_generic_shell = false;
+
+    let items: Vec<CoverageItem> = boundaries
+        .into_iter()
+        .map(|b| {
+            let status = match b.status {
+                crate::boundary::BoundaryStatus::Enforced => {
+                    enforced_count += 1;
+                    "enforced".into()
+                }
+                crate::boundary::BoundaryStatus::ObserveOnly => {
+                    observe_count += 1;
+                    "observe".into()
+                }
+                crate::boundary::BoundaryStatus::Inactive => {
+                    inactive_count += 1;
+                    "inactive".into()
+                }
+                crate::boundary::BoundaryStatus::NotDetected => {
+                    not_detected_count += 1;
+                    "not_detected".into()
+                }
+            };
+
+            let quality = match (&b.kind, &b.status) {
+                (BoundaryKind::ToolHook, crate::boundary::BoundaryStatus::Enforced) => "high".into(),
+                (BoundaryKind::ExecApproval, crate::boundary::BoundaryStatus::Enforced) => "high".into(),
+                (BoundaryKind::ProtectedShell, crate::boundary::BoundaryStatus::Enforced) => {
+                    has_generic_shell = true;
+                    "generic".into()
+                }
+                (BoundaryKind::ProtectedShell, crate::boundary::BoundaryStatus::ObserveOnly) => "observe_only".into(),
+                _ if b.status == crate::boundary::BoundaryStatus::Enforced => "generic".into(),
+                _ => "none".into(),
+            };
+
+            let kind = match b.kind {
+                BoundaryKind::ToolHook => "tool_hook",
+                BoundaryKind::ExecApproval => "exec_approval",
+                BoundaryKind::ProtectedShell => "protected_shell",
+                BoundaryKind::RuntimeHook => "runtime",
+                BoundaryKind::ObserveOnly => "observe_only_kind",
+                BoundaryKind::SystemLevel => "system_level",
+                BoundaryKind::Remote => "remote",
+            };
+
+            CoverageItem {
+                name: b.name,
+                status,
+                kind: kind.into(),
+                note: b.note,
+                quality,
+            }
+        })
+        .collect();
+
+    let payload = CoveragePayload {
+        items,
+        enforced_count,
+        observe_count,
+        inactive_count,
+        not_detected_count,
+        has_generic_shell,
+    };
+    Ok(payload)
 }
 
 #[tauri::command]
@@ -1477,4 +1772,31 @@ mod tests {
         //   Shell hook ≠ full process isolation.
         let _ = action;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Window control commands — invoked from the frontend to control the main window.
+// These are needed because WebviewWindow.getCurrent() from the JS side does not
+// reliably receive the IPC bridge when the WebView is loaded from a non-tauri://
+// origin (e.g., when an HTTP server redirect is in play).
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn window_minimize(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn window_toggle_maximize(window: tauri::WebviewWindow) -> Result<(), String> {
+    let is_max = window.is_maximized().map_err(|e| e.to_string())?;
+    if is_max {
+        window.unmaximize().map_err(|e| e.to_string())
+    } else {
+        window.maximize().map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+pub fn window_close(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
 }

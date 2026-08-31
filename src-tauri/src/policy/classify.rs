@@ -27,11 +27,11 @@ pub struct ParsedCommand {
 /// Strategy:
 ///   1. Trim + lowercase the first token only (preserve arg case).
 ///   2. Look up the first token against the known prefixes:
-///        git            → Git
-///        npm/pnpm/yarn  → Package
-///        pip/pip3/poetry/uv/conda → Package
-///        brew           → Package (system-level)
-///        everything else → Shell
+///       - git            → Git
+///       - npm/pnpm/yarn  → Package
+///       - pip/pip3/poetry/uv/conda → Package
+///       - brew           → Package (system-level)
+///       - everything else → Shell
 ///   3. Build args vec (rest of tokens).
 pub fn classify_shell_command(line: &str) -> ParsedCommand {
     let trimmed = line.trim();

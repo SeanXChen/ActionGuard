@@ -1,4 +1,4 @@
-// ActionGuard v0.2 — Action Safety Layer (local engine)
+// ActionGuard v0.3 — Action Safety Layer (local engine)
 //
 // This binary is the developer-first CLI surface. It reads from ~/.actionguard/
 // directly and does not require the Tauri GUI to be running. The full set of
@@ -24,14 +24,14 @@ use clap::{Parser, Subcommand};
 use serde::Deserialize;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 #[derive(Parser)]
 #[command(
     name = "actionguard",
     version,
-    about = "ActionGuard v0.2 — Action Safety Layer (local engine)"
+    about = "ActionGuard v0.3 — Action Safety Layer (local engine)"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -133,6 +133,13 @@ enum Cmd {
         #[command(subcommand)]
         cmd: RuleCmd,
     },
+    /// Show Protection Coverage — how well ActionGuard protects this machine
+    /// against AI actions, organized by boundary quality (highest → lowest).
+    Coverage {
+        /// Show detailed per-boundary breakdown.
+        #[arg(long, short)]
+        verbose: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -178,6 +185,31 @@ enum RuleCmd {
 
 fn main() {
     let cli = Cli::parse();
+
+    // Double-click on actionguard.exe (no args) → launch GUI automatically.
+    // This is the primary entry point for regular users who just double-click.
+    if cli.cmd.is_none() {
+        #[cfg(target_os = "windows")]
+        {
+            // Try to find and launch the GUI binary next to this executable.
+            if let Some(gui_path) = find_gui_binary() {
+                use std::process::Stdio;
+                // Launch detached so the console window closes immediately.
+                let _ = std::process::Command::new(&gui_path)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn();
+                std::process::exit(0);
+            }
+        }
+        // Fallback: no GUI found or not Windows → print a friendly hint.
+        println!("ActionGuard v{}", env!("CARGO_PKG_VERSION"));
+        println!("No active session. Double-click this file to open the GUI, or run:");
+        println!("  actionguard protect <workspace>");
+        std::process::exit(0);
+    }
+
     match cli.cmd {
         Some(Cmd::Setup { yes }) => std::process::exit(setup::run_setup(yes)),
         Some(Cmd::Uninstall { yes }) => std::process::exit(setup::run_uninstall(yes)),
@@ -218,6 +250,7 @@ fn main() {
             RuleCmd::Search { query } => rule_search(&query),
             RuleCmd::Install { file } => rule_install(&file),
         },
+        Some(Cmd::Coverage { verbose }) => coverage(verbose),
     }
 }
 
@@ -229,8 +262,8 @@ fn main() {
 fn print_enforcement_paths() {
     println!();
     println!("Execution Path Matrix (this platform):");
-    println!("  {:<42} {:<8} {:<8} {}", "path", "observe", "block", "note");
-    println!("  {:<42} {:<8} {:<8} {}", "────", "───────", "─────", "────");
+    println!("  {:<42} {:<8} {:<8} note", "path", "observe", "block");
+    println!("  {:<42} {:<8} {:<8} ────", "────", "───────", "─────");
     for p in actionguard_lib::platform::enforcement_paths() {
         println!(
             "  {:<42} {:<8} {:<8} {}",
@@ -247,7 +280,7 @@ fn status() {
     let link = storage::current_hook_symlink();
     match read_hook_descriptor() {
         Ok((port, secret, raw)) => {
-            println!("actionguard v0.2.0");
+            println!("actionguard v0.3.0");
             println!("active session:   yes");
             println!("hook descriptor:  {}", link.display());
             println!("port:             {port}");
@@ -267,7 +300,7 @@ fn status() {
             }
         }
         Err(e) => {
-            println!("actionguard v0.2.0");
+            println!("actionguard v0.3.0");
             println!("active session:   no");
             println!("reason:           {e}");
         }
@@ -410,7 +443,7 @@ fn policy_list() {
         println!("(no rules loaded)");
         return;
     }
-    println!("{:<32} {:<8} {:<10} {:<40} {}", "ID", "SRC", "ACTION", "MATCH", "REASON");
+    println!("{:<32} {:<8} {:<10} {:<40} REASON", "ID", "SRC", "ACTION", "MATCH");
     for r in &set.rules {
         let src = match r.source {
             PolicySource::Builtin => "builtin",
@@ -455,7 +488,7 @@ fn match_spec_summary(m: &MatchSpec) -> String {
 // policy-lint — validate a YAML rules file
 // ---------------------------------------------------------------------------
 
-fn policy_lint(path: &PathBuf) {
+fn policy_lint(path: &Path) {
     match policy::lint_file(path) {
         Ok(parsed) => {
             println!("ok — {} rule(s) in {}", parsed.rules.len(), path.display());
@@ -536,7 +569,7 @@ fn rule_search(query: &str) {
         println!("tip: community packs arrive via `actionguard rule install <file.yml>`.");
         return;
     }
-    println!("{:<32} {:<8} {:<10} {:<40} {}", "ID", "SRC", "ACTION", "MATCH", "REASON");
+    println!("{:<32} {:<8} {:<10} {:<40} REASON", "ID", "SRC", "ACTION", "MATCH");
     for r in &hits {
         let src = match r.source {
             PolicySource::Builtin => "builtin",
@@ -552,7 +585,7 @@ fn rule_search(query: &str) {
     println!("{} rule(s) match '{query}'", hits.len());
 }
 
-fn rule_install(file: &PathBuf) {
+fn rule_install(file: &Path) {
     use actionguard_lib::models::PolicySource;
 
     let parsed = match policy::lint_file(file) {
@@ -603,9 +636,9 @@ fn session_list() {
             println!("(no sessions recorded yet)");
         }
         Ok(sessions) => {
-            println!("{:<8} {:<24} {:<10} {:<10} {:<8} {:<8} {:<6} {}", "#", "STARTED", "STATUS", "MODE", "TOTAL", "BLOCKED", "RISK", "WORKSPACE");
+            println!("{:<8} {:<24} {:<10} {:<10} {:<8} {:<8} {:<9} WORKSPACE", "#", "STARTED", "STATUS", "MODE", "TOTAL", "BLOCKED", "RISK");
             for s in sessions {
-                println!("{:<8} {:<24} {:<10} {:<10} {:<8} {:<8} {:<6} {}",
+                println!("{:<8} {:<24} {:<10} {:<10} {:<8} {:<8} {:<9} {}",
                     format!("#{:05}", s.num),
                     s.started_at,
                     session_status_str(s.status),
@@ -701,8 +734,8 @@ fn actions_show(session: &str, category: Option<&str>, risk: Option<&[String]>, 
         println!("(no actions match the filter for session {session})");
         return;
     }
-    println!("{:<21} {:<14} {:<10} {:<40} {:<10} {:<10} {}",
-        "TIME", "AGENT", "KIND", "TARGET", "RISK", "RESULT", "REASONS");
+    println!("{:<21} {:<14} {:<10} {:<40} {:<10} {:<10} REASONS",
+        "TIME", "AGENT", "KIND", "TARGET", "RISK", "RESULT");
     for a in actions {
         let target = a.target_str();
         let target_short = if target.len() > 40 { &target[..40] } else { target };
@@ -771,10 +804,7 @@ fn resolve_approval(id: Option<&str>, decision: Decision, always: bool) {
                     std::process::exit(2);
                 }
             };
-            let pending: Vec<ApprovalRequestCli> = match serde_json::from_str(&body) {
-                Ok(p) => p,
-                Err(_) => Vec::new(),
-            };
+            let pending: Vec<ApprovalRequestCli> = serde_json::from_str(&body).unwrap_or_default();
             if pending.is_empty() {
                 println!("(no pending approvals)");
                 return;
@@ -1094,7 +1124,7 @@ fn find_gui_binary() -> Option<PathBuf> {
     None
 }
 
-fn print_manual_instructions(ws: &PathBuf, mode_str: &str) {
+fn print_manual_instructions(ws: &Path, mode_str: &str) {
     eprintln!("actionguard: GUI binary not found next to the CLI.");
     eprintln!();
     eprintln!("To protect this workspace:");
@@ -1236,6 +1266,155 @@ fn stats(export: Option<&std::path::Path>) {
         } else {
             eprintln!("error: could not write report to {}", path.display());
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// coverage — Protection Coverage Ladder (Generic Boundary First)
+// ---------------------------------------------------------------------------
+
+fn coverage(verbose: bool) {
+    use actionguard_lib::models::BoundaryKind;
+    use actionguard_lib::boundary::{self, BoundaryStatus};
+
+    let boundaries = boundary::detect_boundaries();
+
+    // Tally by quality tier
+    let mut enforced_high = Vec::new();  // Tool Hook / Exec Approval — highest quality
+    let mut enforced_generic = Vec::new(); // Protected Shell
+    let mut observe = Vec::new();         // Observe-only
+    let mut not_detected = Vec::new();     // Not detected
+
+    for b in &boundaries {
+        match (b.kind, b.status) {
+            (BoundaryKind::ToolHook, BoundaryStatus::Enforced)
+            | (BoundaryKind::ToolHook, BoundaryStatus::Inactive) => {
+                enforced_high.push(b)
+            }
+            (BoundaryKind::ExecApproval, _) => enforced_high.push(b),
+            (BoundaryKind::ProtectedShell, BoundaryStatus::Enforced) => {
+                enforced_generic.push(b)
+            }
+            (BoundaryKind::ProtectedShell, BoundaryStatus::ObserveOnly) => {
+                observe.push(b)
+            }
+            _ if b.status == BoundaryStatus::Enforced => enforced_generic.push(b),
+            _ if b.status == BoundaryStatus::ObserveOnly => observe.push(b),
+            _ => not_detected.push(b),
+        }
+    }
+
+    let total_enforced = enforced_high.len() + enforced_generic.len();
+    let total = boundaries.len();
+
+    println!();
+    println!("Protection Coverage — v{}", env!("CARGO_PKG_VERSION"));
+    println!("──────────────────────────────────────────────────────────────");
+    println!();
+    println!("  {} boundary tiers active (out of {})",
+        if total_enforced > 0 { "✓".to_string() } else { "○".to_string() },
+        total
+    );
+    println!();
+
+    // Section 1: Tool Hook / Exec Approval — highest quality
+    if !enforced_high.is_empty() || verbose {
+        println!("  ┌─ High-Quality Boundaries (Tool Hook / Exec Approval)");
+        if enforced_high.is_empty() {
+            println!("  │  (none detected)");
+        } else {
+            for b in &enforced_high {
+                let icon = if b.status == boundary::BoundaryStatus::Enforced { "✓" } else { "○" };
+                println!("  │  {icon} {}", b.name);
+            }
+        }
+        println!("  └  enforced: {}  |  generic fallback: 0", enforced_high.len());
+        println!();
+    }
+
+    // Section 2: Generic — Protected Shell
+    if !enforced_generic.is_empty() || verbose || enforced_high.is_empty() {
+        println!("  ┌─ Generic Boundaries (Protected Shell)");
+        if enforced_generic.is_empty() {
+            println!("  │  (no shell hook detected — unknown AI apps: observe-only)");
+        } else {
+            for b in &enforced_generic {
+                let icon = if b.status == boundary::BoundaryStatus::Enforced { "✓" } else { "○" };
+                println!("  │  {icon} {}", b.name);
+            }
+        }
+        println!("  └  enforced: {}", enforced_generic.len());
+        println!();
+    }
+
+    // Section 3: Observe-only
+    if !observe.is_empty() || verbose {
+        println!("  ┌─ Observe-only (no enforcement mechanism on this path)");
+        if observe.is_empty() {
+            println!("  │  (all paths enforced)");
+        } else {
+            for b in &observe {
+                println!("  │  ⚠ {}", b.name);
+            }
+        }
+        println!("  └  observe-only: {}", observe.len());
+        println!();
+    }
+
+    // Section 4: Not detected
+    if !not_detected.is_empty() || verbose {
+        println!("  ┌─ Not detected (no boundary available for these paths)");
+        if not_detected.is_empty() {
+            println!("  │  (all known paths detected)");
+        } else {
+            for b in &not_detected {
+                println!("  │  ○ {}", b.name);
+            }
+        }
+        println!("  └  not detected: {}", not_detected.len());
+        println!();
+    }
+
+    // Coverage summary box
+    let summary = if total_enforced > 0 {
+        let pct = (total_enforced as f64 / total as f64 * 100.0).round() as u32;
+        format!(
+            "{}/{} boundaries enforced ({}%)",
+            total_enforced,
+            total,
+            pct
+        )
+    } else {
+        "No enforced boundaries — AI actions run without pre-action interception".to_string()
+    };
+
+    println!("  ╔══════════════════════════════════════════════════════╗");
+    println!("  ║  {}", {
+        let padding = 50 - summary.len();
+        let pad_left = padding / 2;
+        let pad_right = padding - pad_left;
+        format!("{}{}{}", " ".repeat(pad_left), summary, " ".repeat(pad_right))
+    });
+    println!("  ╚══════════════════════════════════════════════════════╝");
+    println!();
+
+    if verbose {
+        println!("Run `actionguard boundary list` for the full per-boundary breakdown.");
+    } else {
+        println!("  Run `actionguard coverage --verbose` for the full breakdown.");
+        println!("  Run `actionguard boundary list` for per-boundary details.");
+    }
+    println!();
+
+    // Generic coverage note
+    let has_shell = !enforced_generic.is_empty();
+    if has_shell {
+        println!("  Generic shell boundary is active — actions from unknown AI apps");
+        println!("  (apps without a dedicated hook) are still protected via shell.");
+    } else {
+        println!("  ⚠ No generic shell boundary detected.");
+        println!("  Unknown AI apps (no dedicated hook) are NOT protected.");
+        println!("  Run `actionguard setup` to install shell hooks.");
     }
 }
 

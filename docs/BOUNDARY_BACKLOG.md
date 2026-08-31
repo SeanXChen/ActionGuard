@@ -1,6 +1,6 @@
 # Boundary Backlog — 边界发现漏斗 + 规则治理
 
-> 状态：v0.2 起步（2026-08-24）
+> 状态：v0.3（2026-08-31）
 > 角色：**我是 Maintainer + Boundary Curator**，不是"每天手写 YAML 的规则苦力"。
 > 每天发现问题，只做一件事：**往 Backlog 加一行**。攒够一批，再批量提炼成
 > Facts → Golden Test → Policy → Regression。
@@ -43,21 +43,28 @@
 **每一条规则必须同时拥有测试**。规则 + 测试成对提交，否则不算完成
 （Golden Corpus 是回归保障：加第 100 条规则不能搞坏前 99 条）。
 
-## 3. 现有内置规则盘点（68 条，v0.2）
+## 3. 现有内置规则盘点（86 条，v0.2 + P1 扩展）
 
 > 测试列：G = Golden Corpus 已覆盖，B = bypass 测试已覆盖，— = 待覆盖。
+> **P1 更新（2026-08-27）：** secrets.yml 从 19 条扩展到 37 条，
+> 覆盖 shell history、credential 目录、aggregation（archive/zip）、exfiltration（curl/wget/nc）。
 
-### secrets.yml（19）— Tier 0
-| 规则 | 处理 | 风险 | 测试 |
-|------|------|------|------|
-| deny-write-env / deny-write-env-variant | Block | critical | G |
-| deny-delete-pem / deny-delete-key | Block | critical | G |
-| deny-write-ssh-id / deny-write-ssh-id-ed25519 | Block | critical | G |
-| deny-write-aws-creds | Block | critical | G |
-| deny-write-gnupg / deny-write-credentials | Block | critical | — |
-| confirm-cat-env / -prod / -local | Ask | high | — |
-| confirm-cat-pem / -key / -id-rsa / -id-ed25519 | Ask | high | — |
-| confirm-cat-credentials-json / -yml | Ask | high | — |
+### secrets.yml（37）— Tier 0 / P1
+
+| 分类 | 规则 | 处理 | 风险 | 测试 |
+|------|------|------|------|------|
+| 写保护 | deny-write-env / deny-write-env-variant / deny-write-token-file / deny-write-secret-file | Block | critical | G |
+| 写保护 | deny-delete-pem / deny-delete-key | Block | critical | G |
+| 写保护 | deny-write-ssh-id / deny-write-ssh-id-ed25519 | Block | critical | G |
+| 写保护 | deny-write-aws-creds / deny-write-gnupg / deny-write-credentials | Block | critical | G |
+| **P1** | read-shell-history（bash/zsh/PowerShell） | Ask | critical/high | G |
+| **P1** | read-ssh-private-key / read-ssh-ed25519-key / read-any-ssh-key | Ask | critical | G |
+| **P1** | read-aws-credentials / read-gcloud-credentials / read-azure-credentials | Ask | critical | G |
+| **P1** | read-env-file / read-env-prod / read-env-local | Ask | critical/high | G |
+| **P1** | read-git-credentials / read-netrc | Ask | high | — |
+| **P1** | read-pem-key / read-private-key / read-credentials-json/yml/yaml / read-service-account-key | Ask | critical | G |
+| **P1** | archive-credential-dir / archive-home-secrets / zip-credential-dir | Ask | critical | — |
+| **P1** | curl-with-credential-data / wget-exfil / nc-exfil | Ask | critical/high | — |
 
 ### shell.yml（15）— 混合
 | 规则 | 处理 | 风险 | 测试 |
@@ -107,8 +114,8 @@
 | B010 | PowerShell encoded command（`-EncodedCommand`） | critical | Block | — | — | 传统 EDR 规则转译 |
 | B011 | chmod +x 后执行 `./<下载的脚本>` | medium | Ask | — | — | 供应链 |
 | B012 | `git reset --hard` 之外的破坏性 revert（checkout .） | medium | Ask | — | — | 真实使用 |
-| B013 | `confirm-cat-env-prod/local` 是死规则：`cat .env.production` 先命中 `confirm-cat-env`（first-match） | low | 修复 | — | G（锁定当前行为） | Golden 套件 |
-| B014 | `cat ~/.aws/credentials` 无 confirm-cat-* 覆盖 → 回退放行（写被 deny-write-aws-creds 拦，读没拦） | critical | Block/Ask | credential_detected 未显式化 | G（锁定缺口） | Golden 套件 |
+| B013 | `read-env-prod/local` 被 `read-env-file` 遮蔽（first-match-wins） | low | ✅ 已修复（改用 `args_any` OR 语义） | G（锁定当前行为） | Golden 套件 |
+| B014 | `cat ~/.aws/credentials` 无覆盖 → 回退放行 | critical | ✅ 已修复（新增 `read-aws-credentials` + `args_any`） | G | Golden 套件 + P1 扩展 |
 | B015 | matcher 的 `args_contains` 大小写折叠，`-d`（安全删除）被 `-D` 规则遮蔽 | medium | ✅ 已修复（git.yml 改用大小写敏感 regex） | — | G | Golden 套件 |
 
 ## 5. 每周节奏

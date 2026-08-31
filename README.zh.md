@@ -2,6 +2,8 @@
 
 ### 给 AI 干活的空间。对它能做什么，保持控制。
 
+**当前版本：v0.3.0**（2026-08-30 发布）
+
 **在 AI 自动化行动之前，保护你的机器。**
 
 **本地 · 确定性 · 厂商中立。** · 无云端 · 无 SDK · 决策路径上没有模型。
@@ -152,7 +154,7 @@ Agent 可以安装软件包          →   npm publish
 | **包 Packages** | `npm`, `pnpm`, `pip`, `cargo` | 不可信安装 |
 | **密钥 Secrets** | `.env`、SSH 密钥、凭据 | 访问或外泄 |
 
-这些是**当前 v0.2 的动作类别**，在本地强制执行并记入追加式账本。浏览器、网络、API、远程自动化**刻意不在** v0.2 内。
+这些是**当前 v0.3 的动作类别**，在本地强制执行并记入追加式账本。浏览器、网络、API、远程自动化**刻意不在** v0.3 内。
 
 ---
 
@@ -205,7 +207,7 @@ actionguard policy-check "git reset --hard HEAD~1" --explain
 
 ## 今天已验证
 
-> **真实机器实测，不是营销。** 状态于 **2026-08-21 在 ActionGuard v0.2 上实测**；每个边界的完整细节与日期在 [BOUNDARIES.md](./BOUNDARIES.md)。每条声明都可用 `actionguard boundary test` 复现，并记录在 [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md)。
+> **真实机器实测，不是营销。** 状态于 **2026-08-26 在 ActionGuard v0.3 上实测**；每个边界的完整细节与日期在 [BOUNDARIES.md](./BOUNDARIES.md)。每条声明都可用 `actionguard boundary test` 复现，并记录在 [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md)。
 
 | 边界 | 状态 |
 |---|---|
@@ -282,7 +284,7 @@ actionguard stats | capabilities | boundary list
 actionguard rule search <q> | rule install <file.yml>
 ```
 
-完整命令参考随二进制提供——运行 `actionguard --help` 即可查看。本清单已对照 `--help` 逐一核对（v0.2）。
+完整命令参考随二进制提供——运行 `actionguard --help` 即可查看。本清单已对照 `--help` 逐一核对（v0.3）。
 
 ---
 
@@ -299,7 +301,7 @@ actionguard rule search <q> | rule install <file.yml>
 3. **远程自动化不在范围内。** 在另一台机器上执行的动作（如 Manus Cloud）无法被本地工具强制。
 4. **已验证的边界很少。** CodeBuddy 与受保护 Shell 为核心已验证。Cursor、Claude Code、Codex、OpenClaw、Manus 是「已记录」或「调查中」——尚未强制。
 5. **尚无沙箱。** 在隔离环境（容器 / 网络隔离）中运行动作属于未来工作。
-6. **`undo` 在 v0.2 的 CLI 中未暴露。** v0.1 的快照/恢复机制仍存在于 GUI 流程背后；CLI `undo` 命令计划于 v0.3。
+6. **`undo` 在 v0.3 的 CLI 中未完全暴露。** v0.1 的快照/恢复机制仍存在于 GUI 流程背后；CLI `undo` 命令计划于 v0.4。
 
 > **关于绕过的诚实声明。** ActionGuard 只强制**经过受支持边界**的动作。绕过边界的动作会被观察、记录，并标记为 **Bypassed / Unsupported（已绕过 / 不受支持）**——绝不会被默认为已拦截。「我们看到了但没拦住」对一条不受支持的路径而言是正确的、诚实的结果，而不是产品失效。
 
@@ -328,6 +330,16 @@ ActionGuard 是本地优先的，但我们正在积极探索**团队部署与企
 ## 贡献
 
 欢迎贡献——尤其是**边界发现**（一个 ActionGuard 还没处理、但确实危险的自动化行为——不需要写 YAML）和**边界验证报告**（本项目的核心资产）。见 [CONTRIBUTING.md](./docs/CONTRIBUTING.md)（报告模板、规则格式、代码规范、安全漏洞报告）。
+
+### 知识产权
+
+ActionGuard 在保持开放开发的同时，对知识产权保护采取深思熟虑的态度：
+
+- **[IP_STRATEGY.md](./IP_STRATEGY.md)** — 我们的整体 IP 战略框架
+- **[PATENT_CANDIDATES.md](./PATENT_CANDIDATES.md)** — 正在评估的技术创新
+- **[docs/IP_LAYER_GUIDE.md](./docs/IP_LAYER_GUIDE.md)** — 关于公开内容 vs. 保护内容的指南
+
+**给贡献者**：如果你发现了新的强制机制或有关于技术创新的想法，请在公开文档之前与维护者讨论。
 
 另见：[SECURITY_MODEL.md](./SECURITY_MODEL.md) · [SECURITY_TEST_MATRIX.md](./SECURITY_TEST_MATRIX.md) · [BOUNDARIES.md](./BOUNDARIES.md) · [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) · [docs/FACTS_SCHEMA.md](./docs/FACTS_SCHEMA.md) · [docs/BOUNDARY_BACKLOG.md](./docs/BOUNDARY_BACKLOG.md)
 

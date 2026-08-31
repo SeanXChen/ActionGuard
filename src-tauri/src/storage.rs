@@ -93,7 +93,7 @@ pub fn list_sessions() -> Result<Vec<SessionSummary>> {
             }
         }
     }
-    out.sort_by(|a, b| b.num.cmp(&a.num));
+    out.sort_by_key(|a| std::cmp::Reverse(a.num));
     Ok(out)
 }
 

@@ -6,19 +6,14 @@ use serde::{Deserialize, Serialize};
 
 /// File-system action verbs (kept for v0.1 backward-compat with .actions.json).
 /// Stays File-only; non-File categories use the free-form `Action.kind` string.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ActionKind {
-    Create,
+    #[default]
     Modify,
+    Create,
     Delete,
     Rename,
-}
-
-impl Default for ActionKind {
-    fn default() -> Self {
-        ActionKind::Modify
-    }
 }
 
 /// Top-level action taxonomy. v0.2 ships File / Shell / Git / Package / Secret.
@@ -33,6 +28,41 @@ pub enum ActionCategory {
     Git,
     Package,
     Secret,
+}
+
+/// Data sensitivity class — the semantic layer that drives credential
+/// exfiltration detection.
+///
+/// Unlike a path-based rule, `DataClass` says *what kind of data* an action
+/// touches, not *where* it lives. This allows rules to express intent:
+///   "Deny reading any Credential / Critical data"
+/// instead of:
+///   "Deny reading ~/.ssh/id_rsa, ~/.aws/credentials, …"
+///
+/// These map to the "Secret Classes" from the v0.2 adversarial analysis:
+///   Read → Collect → Transform → Transmit
+/// v0.2 covers Read (enforced via credential rules); Collection/Transform/Transmit
+/// are observed and correlated in the session risk engine (Phase P1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DataClass {
+    /// No sensitive data involved (ordinary source code, configs, docs, etc.)
+    #[default]
+    Ordinary,
+    /// Credentials: tokens, keys, secrets used to authenticate or authorize.
+    /// Subclasses tracked via `credential_type` on `LedgerEntry` when known.
+    Credential,
+    /// Personally identifiable information, health records, financial data,
+    /// legal documents — anything that creates regulatory exposure.
+    PersonalData,
+    /// Internal business logic, proprietary algorithms, M&A data,
+    /// unreleased product plans.
+    Proprietary,
+    /// System-level secrets: SSH keys, GPG keys, CA certificates,
+    /// host credentials.
+    SystemSecret,
+    /// Shell command history — often contains tokens, credentials, server names.
+    ShellHistory,
 }
 
 impl ActionCategory {
@@ -51,19 +81,14 @@ impl ActionCategory {
 // Risk & decisions
 // ===========================================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum RiskLevel {
+    #[default]
     Low,
     Medium,
     High,
     Critical,
-}
-
-impl Default for RiskLevel {
-    fn default() -> Self {
-        RiskLevel::Low
-    }
 }
 
 impl RiskLevel {
@@ -78,18 +103,13 @@ impl RiskLevel {
 }
 
 /// Policy decision. `Ask` corresponds to YAML `action: confirm`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Decision {
+    #[default]
     Allow,
     Ask,
     Deny,
-}
-
-impl Default for Decision {
-    fn default() -> Self {
-        Decision::Allow
-    }
 }
 
 // ===========================================================================
@@ -112,9 +132,11 @@ impl Default for Decision {
 /// ActionGuard is deliberately brand-agnostic: it does not care which agent
 /// produced the action, only which boundary class it crossed. A new product
 /// is mapped to a class, not to a bespoke integration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum BoundaryKind {
+    #[default]
+    ObserveOnly,
     /// **C. Protected Shell** — a protected interactive shell hook
     /// (bash/zsh/fish, PowerShell PSReadLine). Pre-action, enforceable.
     ProtectedShell,
@@ -132,7 +154,6 @@ pub enum BoundaryKind {
     RuntimeHook,
     /// No pre-action boundary — the action was recorded after the fact.
     /// Decisions can only be *observed*, never guaranteed.
-    ObserveOnly,
     /// **E. System Enforcement** (future L4). Every local action crosses it.
     SystemLevel,
     /// **F. Remote Automation** — the action never lands on this machine
@@ -141,13 +162,7 @@ pub enum BoundaryKind {
     Remote,
 }
 
-impl Default for BoundaryKind {
-    fn default() -> Self {
-        // Most conservative default: if we do not know the boundary, we
-        // cannot claim to have blocked anything.
-        BoundaryKind::ObserveOnly
-    }
-}
+
 
 impl BoundaryKind {
     pub fn as_str(&self) -> &'static str {
@@ -201,6 +216,341 @@ pub enum EnforcementStatus {
     Bypassed,
     /// No observation or enforcement path exists for this action.
     Unsupported,
+}
+
+// ===========================================================================
+// v0.3 — Contextual Facts Schema 2.0
+// ===========================================================================
+
+/// What class of resource an action targets — drives semantic policy rules
+/// instead of path-based string matching.
+///
+/// v0.2 used paths like `~/.ssh/**` to detect credential access.
+/// v0.3 uses `target_class: credential` to express the same intent:
+///   "Deny reading any Critical Credential resource"
+/// instead of:
+///   "Deny reading ~/.ssh/id_rsa, ~/.aws/credentials, …"
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetClass {
+    /// Ordinary source code, configs, docs — no special sensitivity.
+    #[default]
+    SourceCode,
+    /// Credentials: tokens, keys, secrets used to authenticate.
+    Credential,
+    /// System-level secrets: SSH keys, GPG keys, CA certificates.
+    SystemSecret,
+    /// Configuration files that may contain embedded secrets.
+    Config,
+    /// Build artifacts, caches, generated files.
+    BuildArtifact,
+    /// Package manager manifests and lock files.
+    PackageManifest,
+    /// Git repository metadata (.git directory).
+    GitRepo,
+    /// User data: personal files, downloads, documents.
+    UserData,
+    /// External resources: remote services, APIs, cloud resources.
+    ExternalResource,
+    /// Network endpoints and connections.
+    NetworkEndpoint,
+    /// Other / unclassified.
+    Unknown,
+}
+
+impl TargetClass {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TargetClass::SourceCode => "source_code",
+            TargetClass::Credential => "credential",
+            TargetClass::SystemSecret => "system_secret",
+            TargetClass::Config => "config",
+            TargetClass::BuildArtifact => "build_artifact",
+            TargetClass::PackageManifest => "package_manifest",
+            TargetClass::GitRepo => "git_repo",
+            TargetClass::UserData => "user_data",
+            TargetClass::ExternalResource => "external_resource",
+            TargetClass::NetworkEndpoint => "network_endpoint",
+            TargetClass::Unknown => "unknown",
+        }
+    }
+
+    /// Default sensitivity level for each target class.
+    pub fn default_sensitivity(&self) -> SensitivityLevel {
+        match self {
+            TargetClass::SystemSecret | TargetClass::Credential => SensitivityLevel::Critical,
+            TargetClass::ExternalResource | TargetClass::NetworkEndpoint => SensitivityLevel::High,
+            TargetClass::Config => SensitivityLevel::Medium,
+            _ => SensitivityLevel::Low,
+        }
+    }
+}
+
+/// Who owns the resource being accessed — critical for detecting
+/// third-party resource modification (e.g. the gym booking scenario:
+/// "cancel someone else's reservation").
+///
+/// In local contexts, ownership is inferred from path ownership.
+/// In remote/external contexts, ownership may be `Unknown` until the
+/// source system provides provenance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Ownership {
+    /// The current user owns this resource.
+    #[default]
+    SelfOwned,
+    /// A third party owns this resource (other user, external service).
+    ThirdParty,
+    /// Shared resource (group-owned, team-shared).
+    Shared,
+    /// Cannot be determined from available context.
+    Unknown,
+}
+
+impl Ownership {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Ownership::SelfOwned => "self",
+            Ownership::ThirdParty => "third_party",
+            Ownership::Shared => "shared",
+            Ownership::Unknown => "unknown",
+        }
+    }
+}
+
+/// Where the action has effect — local machine vs external system.
+/// Fundamental for detecting the gym booking scenario: "cancel reservation"
+/// has `externality: third_party` even though the command runs locally.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Externality {
+    /// Action affects only local resources on this machine.
+    #[default]
+    Local,
+    /// Action affects a third-party resource (other user's data, external API).
+    ThirdParty,
+    /// Action creates or modifies a public/external resource.
+    Public,
+    /// Action involves an external system (cloud, SaaS, remote service).
+    ExternalSystem,
+}
+
+impl Externality {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Externality::Local => "local",
+            Externality::ThirdParty => "third_party",
+            Externality::Public => "public",
+            Externality::ExternalSystem => "external_system",
+        }
+    }
+}
+
+/// Side effects an action may produce — drives the "consequence" dimension
+/// of contextual policy. E.g. "git push --force" and "git status" are both
+/// Git actions but have completely different side effects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SideEffect {
+    /// No meaningful side effects.
+    #[default]
+    None,
+    /// Modifies or destroys data (file delete, git reset, DB write).
+    Destructive,
+    /// Permanently removes data that cannot be easily recovered.
+    Irreversible,
+    /// Modifies a resource belonging to another user or system.
+    ThirdPartyImpact,
+    /// Creates or modifies network connections or external calls.
+    ExternalCall,
+    /// Modifies system configuration or installed software.
+    SystemModification,
+    /// Creates a new external artifact (commit, release, publication).
+    Publication,
+}
+
+impl SideEffect {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SideEffect::None => "none",
+            SideEffect::Destructive => "destructive",
+            SideEffect::Irreversible => "irreversible",
+            SideEffect::ThirdPartyImpact => "third_party_impact",
+            SideEffect::ExternalCall => "external_call",
+            SideEffect::SystemModification => "system_modification",
+            SideEffect::Publication => "publication",
+        }
+    }
+}
+
+/// Whether an action's effects can be reversed — critical for risk escalation.
+/// "AI modifies README" and "AI deletes .git" may have the same operation type
+/// but vastly different reversibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Reversibility {
+    /// Effects can be trivially restored (e.g. re-download a package).
+    #[default]
+    Reversible,
+    /// Reversible with some effort (e.g. git reset, file restore from backup).
+    Difficult,
+    /// Effects cannot be recovered (e.g. git push --force, cloud resource deletion).
+    Irreversible,
+    /// Reversibility cannot be determined.
+    Unknown,
+}
+
+impl Reversibility {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Reversibility::Reversible => "reversible",
+            Reversibility::Difficult => "difficult",
+            Reversibility::Irreversible => "irreversible",
+            Reversibility::Unknown => "unknown",
+        }
+    }
+}
+
+/// How sensitive a resource or action is — used for risk escalation when
+/// `RiskLevel` alone is insufficient.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SensitivityLevel {
+    /// Ordinary resource, no special sensitivity.
+    #[default]
+    Low,
+    /// Sensitive but not critical (configs, package manifests).
+    Medium,
+    /// High-value target (credentials, system secrets, external resources).
+    High,
+    /// Critical: credentials, private keys, PII, production secrets.
+    Critical,
+}
+
+impl SensitivityLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SensitivityLevel::Low => "low",
+            SensitivityLevel::Medium => "medium",
+            SensitivityLevel::High => "high",
+            SensitivityLevel::Critical => "critical",
+        }
+    }
+}
+
+/// v0.3 — The consequence dimension of an action's context.
+/// Records what effects the action produces beyond its primary operation.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Consequence {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side_effect: Option<SideEffect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub externality: Option<Externality>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reversibility: Option<Reversibility>,
+    /// True when this action is part of a detected chain (credential collection,
+    /// exfiltration pattern, escalation sequence).
+    #[serde(default)]
+    pub is_chain_link: bool,
+}
+
+/// v0.3 — Target context: what resource class and ownership context the action affects.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TargetContext {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class: Option<TargetClass>,
+    #[serde(default)]
+    pub sensitivity: SensitivityLevel,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ownership: Option<Ownership>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ownership_note: Option<String>,
+}
+
+/// v0.3 — Provenance: where an action came from.
+/// Allows the ledger to answer "how do we know about this action?"
+/// instead of just "what happened?".
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Provenance {
+    /// The boundary class through which this action was detected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boundary: Option<BoundaryKind>,
+    /// Confidence level of this detection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<ProvenanceConfidence>,
+    /// When the action was observed (ISO 8601).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProvenanceConfidence {
+    /// Observed through a verified enforcement path (tool hook, exec approval).
+    #[default]
+    Verified,
+    /// Inferred from shell/preexec observation.
+    Inferred,
+    /// Heuristic or pattern-based detection.
+    Heuristic,
+}
+
+impl ProvenanceConfidence {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ProvenanceConfidence::Verified => "verified",
+            ProvenanceConfidence::Inferred => "inferred",
+            ProvenanceConfidence::Heuristic => "heuristic",
+        }
+    }
+}
+
+/// v0.3 — Action correlation: links actions into sequences and chains.
+/// Used to detect patterns like:
+///   Read credential → Read credential → Archive → External send
+/// which individually might be Low risk but collectively are Critical.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ActionCorrelation {
+    /// IDs of related actions in the same session.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub related_actions: Vec<String>,
+    /// Type of correlation detected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_type: Option<ActionChainType>,
+    /// Human-readable description of the detected pattern.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_description: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionChainType {
+    /// Credential access pattern: multiple credential sources touched.
+    #[default]
+    CredentialAccess,
+    /// Aggregation pattern: credentials collected and prepared for transfer.
+    CredentialCollection,
+    /// Exfiltration: collected data prepared for or sent to external destination.
+    Exfiltration,
+    /// Privilege escalation: escalating access pattern.
+    PrivilegeEscalation,
+    /// Destructive cascade: multiple destructive operations in sequence.
+    DestructiveCascade,
+    /// Other correlated sequence.
+    Other,
+}
+
+impl ActionChainType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ActionChainType::CredentialAccess => "credential_access",
+            ActionChainType::CredentialCollection => "credential_collection",
+            ActionChainType::Exfiltration => "exfiltration",
+            ActionChainType::PrivilegeEscalation => "privilege_escalation",
+            ActionChainType::DestructiveCascade => "destructive_cascade",
+            ActionChainType::Other => "other",
+        }
+    }
 }
 
 impl EnforcementStatus {
@@ -334,18 +684,15 @@ pub struct ActionContext {
 ///
 /// Default is `Protected` for backward compat with v0.1/v0.2 sessions that
 /// predate the mode field (serde defaults to Protected when missing).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SessionMode {
+    #[default]
     Observe,
     Protected,
 }
 
-impl Default for SessionMode {
-    fn default() -> Self {
-        SessionMode::Protected
-    }
-}
+
 
 impl SessionMode {
     pub fn as_str(&self) -> &'static str {
@@ -496,6 +843,52 @@ pub struct Action {
     /// applied, which is exactly the evidence safety analysis needs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enforcement: Option<EnforcementStatus>,
+    /// What kind of data this action touches — drives credential exfiltration
+    /// detection (Read → Collect → Transform → Transmit chain).
+    /// v0.2: populated for Secret-category and credential-path actions.
+    /// v0.3: correlated across session for chain detection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_class: Option<DataClass>,
+    /// When `data_class` is `Credential`, the specific credential type
+    /// detected (e.g. "ssh_private_key", "aws_credentials", "api_token").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_type: Option<String>,
+
+    // --- v0.3: Contextual Facts ---
+    /// Semantic class of the target resource (credential, config, source_code, etc.)
+    /// instead of path-based matching.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_class: Option<TargetClass>,
+    /// Sensitivity level of the target resource.
+    #[serde(default)]
+    pub target_sensitivity: SensitivityLevel,
+    /// Who owns the resource being accessed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ownership: Option<Ownership>,
+    /// Where the action has effect: local, third_party, external_system.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub externality: Option<Externality>,
+    /// What side effects the action may produce.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side_effect: Option<SideEffect>,
+    /// Whether the action's effects can be reversed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reversibility: Option<Reversibility>,
+    /// The consequence dimension of this action.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consequence: Option<Consequence>,
+    /// Target context: class, sensitivity, ownership.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_context: Option<TargetContext>,
+    /// Provenance: where this action came from and how confident we are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<Provenance>,
+    /// Action correlation: related actions and detected chains.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub correlation: Option<ActionCorrelation>,
+    /// Parent action ID (for sub-actions or forked actions).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_action: Option<String>,
 
     // --- asset / side-effect evidence ---
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -549,6 +942,20 @@ impl Action {
             evidence: None,
             user_override: None,
             resolved_at: None,
+            data_class: None,
+            credential_type: None,
+            // v0.3 contextual facts
+            target_class: None,
+            target_sensitivity: SensitivityLevel::Low,
+            ownership: None,
+            externality: Some(Externality::Local),
+            side_effect: None,
+            reversibility: None,
+            consequence: None,
+            target_context: None,
+            provenance: None,
+            correlation: None,
+            parent_action: None,
         }
     }
 
@@ -587,6 +994,20 @@ impl Action {
             evidence: None,
             user_override: None,
             resolved_at: None,
+            data_class: None,
+            credential_type: None,
+            // v0.3 contextual facts
+            target_class: None,
+            target_sensitivity: SensitivityLevel::Low,
+            ownership: Some(Ownership::SelfOwned),
+            externality: Some(Externality::Local),
+            side_effect: None,
+            reversibility: None,
+            consequence: None,
+            target_context: None,
+            provenance: None,
+            correlation: None,
+            parent_action: None,
         }
     }
 
@@ -816,6 +1237,45 @@ pub struct SessionSummary {
     /// sensitive or the popup is doing the user's thinking for them.
     #[serde(default)]
     pub overrides: u32,
+
+    // --- P1: credential exfiltration chain detection ---
+    /// Number of distinct credential sources accessed in this session
+    /// (e.g. SSH key + AWS credentials + shell history = 3).
+    /// Populated by the session risk engine scanning `data_class` on ledger entries.
+    #[serde(default)]
+    pub credential_sources_touched: u32,
+    /// List of credential types touched (e.g. ["ssh_private_key", "aws_credentials",
+    /// "shell_history"]). Drives the session risk banner.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub credential_types: Vec<String>,
+    /// Set to true when the session risk engine detects a potential
+    /// credential exfiltration chain: credential access(s) + aggregation + outbound.
+    /// Triggers the "Credential collection detected" banner in the GUI.
+    #[serde(default)]
+    pub chain_detected: bool,
+
+    // --- v0.3: Contextual Session Risk ---
+    /// Number of distinct target classes accessed in this session.
+    #[serde(default)]
+    pub target_classes_touched: u32,
+    /// Types of target classes accessed (e.g. ["credential", "config", "source_code"]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub target_class_types: Vec<String>,
+    /// Highest sensitivity level touched in this session.
+    #[serde(default)]
+    pub max_sensitivity: SensitivityLevel,
+    /// Number of destructive actions detected.
+    #[serde(default)]
+    pub destructive_actions: u32,
+    /// Number of irreversible actions detected.
+    #[serde(default)]
+    pub irreversible_actions: u32,
+    /// Number of third-party impacting actions detected.
+    #[serde(default)]
+    pub third_party_actions: u32,
+    /// Chain types detected in this session.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub detected_chains: Vec<ActionChainType>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1026,6 +1486,18 @@ pub struct LedgerEntry {
     pub reasons: Vec<String>,
     pub asset: Option<Asset>,
     pub evidence: Option<Evidence>,
+    /// What kind of sensitive data this action touches. Drives exfiltration
+    /// chain detection in the session risk engine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_class: Option<DataClass>,
+    /// Credential type when data_class is Credential (e.g. "ssh", "aws", "api_token").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_type: Option<String>,
+    /// P1 — set when this action is part of a detected exfiltration chain
+    /// (credential access → aggregation → outbound). Feeds the session risk
+    /// banner in the GUI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_tag: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

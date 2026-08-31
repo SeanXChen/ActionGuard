@@ -38,7 +38,6 @@ fn user_rule_evaluated_before_builtin() {
     let user = deny_rule("user-deny-npm", "npm", "install");
     let policy = PolicySet {
         rules: vec![user],
-        ..Default::default()
     };
 
     let a = Action::new_shell_from_source("npm install axios".to_string(), None, "agent", None);
@@ -54,7 +53,6 @@ fn first_match_wins_within_user_rules() {
     let broad = deny_rule("user-deny-npm-all", "npm", "");
     let policy = PolicySet {
         rules: vec![specific, broad],
-        ..Default::default()
     };
 
     let a = Action::new_shell_from_source("npm install axios".to_string(), None, "agent", None);
@@ -84,7 +82,6 @@ fn source_field_never_read_by_matcher() {
     let rule = deny_rule("user-deny-rm", "rm", "-rf");
     let policy = PolicySet {
         rules: vec![rule],
-        ..Default::default()
     };
 
     for src in ["agent", "automation", "workflow", "human", "unknown"] {

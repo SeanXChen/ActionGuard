@@ -3,7 +3,13 @@ import { computed } from "vue";
 import type { RiskLevel } from "../types";
 import { useI18n } from "../i18n";
 
-const props = defineProps<{ level: RiskLevel }>();
+const props = defineProps<{ level: RiskLevel; size?: "sm" | "md" }>();
+
+const fontSize = computed(() => {
+  if (props.size === "sm") return "10px";
+  if (props.size === "md") return "12px";
+  return "11px";
+});
 const { t } = useI18n();
 
 const cls = computed(() => ({
@@ -29,5 +35,5 @@ const label = computed(() => {
 </script>
 
 <template>
-  <span :class="cls">{{ label }}</span>
+  <span :class="cls" :style="{ fontSize }">{{ label }}</span>
 </template>

@@ -6,6 +6,108 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **IP Documentation** — Added `IP_STRATEGY.md`, `PATENT_CANDIDATES.md`, and `docs/IP_LAYER_GUIDE.md` for systematic IP management
+
+## [0.3.0] — 2026-08-30
+
+**Theme: From Single Action Security to Context-aware Action Safety.**
+
+ActionGuard evolves from a rule-based action firewall to a **contextual action safety engine** that understands not just what action was taken, but what it means in the context of the session, the resources accessed, and the patterns detected across actions.
+
+### Added
+
+#### v0.3 — Facts Schema 2.0
+
+- **Semantic Target Classification (`TargetClass`)** — Actions now classify *what kind of resource* they target, not just the path:
+  - `source_code`, `credential`, `system_secret`, `config`, `build_artifact`, `package_manifest`, `git_repo`, `user_data`, `external_resource`, `network_endpoint`, `unknown`
+  - Policy rules can now express "Deny reading any Critical Credential resource" instead of "Deny reading ~/.ssh/**, ~/.aws/**, …"
+
+- **Ownership Tracking (`Ownership`)** — Actions now record who owns the affected resource:
+  - `self`, `third_party`, `shared`, `unknown`
+  - Enables detection of the gym-booking scenario: an agent modifying a third-party resource without authorization
+
+- **Externality Tracking (`Externality`)** — Actions now record where they have effect:
+  - `local`, `third_party`, `public`, `external_system`
+  - Distinguishes local file operations from network exfiltration
+
+- **Side Effect Classification (`SideEffect`)** — Actions now classify their consequences:
+  - `none`, `destructive`, `irreversible`, `third_party_impact`, `external_call`, `system_modification`, `publication`
+
+- **Reversibility Assessment (`Reversibility`)** — Actions now record whether their effects can be undone:
+  - `reversible`, `difficult`, `irreversible`, `unknown`
+  - "AI modifies README" and "AI deletes .git" may have the same operation type but vastly different reversibility
+
+- **Sensitivity Level (`SensitivityLevel`)** — Resources now carry sensitivity ratings:
+  - `low`, `medium`, `high`, `critical`
+  - Driven by `TargetClass.default_sensitivity()` with asset-based overrides
+
+- **Provenance Tracking (`Provenance`)** — Actions now record their source:
+  - `boundary`, `confidence` (verified/inferred/heuristic), `observed_at`
+
+#### v0.3 — Action Correlation Engine
+
+- **Credential Collection Detection** — Detects when an agent accesses multiple credential sources in sequence:
+  - Pattern: 2+ credential accesses without external actions → `CredentialAccess` chain
+  - Enables the key exfiltration pattern: Read SSH key → Read AWS credentials → Read shell history
+
+- **Exfiltration Chain Detection** — Detects the full exfiltration pattern:
+  - Pattern: Multiple credentials + archive + outbound = `Exfiltration` chain
+  - Example: Read credentials → tar → curl to external host
+
+- **Destructive Cascade Detection** — Detects escalating destructive operations:
+  - Pattern: 3+ destructive operations in sequence → `DestructiveCascade` chain
+
+- **Contextual Risk Escalation** — Actions are risk-escalated based on session context:
+  - 2+ credential accesses + accessing another credential → escalate to HIGH
+  - Credential access + archiving → escalate to CRITICAL
+  - Credentials + archive + outbound → escalate to CRITICAL (exfiltration)
+  - Third-party resource modification → escalate to HIGH
+
+#### v0.3 — Contextual Session Risk
+
+- **Session-level threat indicators**:
+  - `target_classes_touched`: Number of distinct resource classes accessed
+  - `max_sensitivity`: Highest sensitivity level touched in session
+  - `destructive_actions` / `irreversible_actions`: Count of dangerous operations
+  - `third_party_actions`: Count of actions affecting third-party resources
+  - `detected_chains`: Types of attack patterns detected
+
+- **Chain tagging on ledger entries** — Individual actions in a detected chain are tagged for UI display
+
+#### v0.3 — Schema & Documentation
+
+- **`correlation.rs`** — New module for action correlation and pattern detection
+- **`risk.rs` enhanced** — Added `classify_context()` function that stamps contextual facts on every action
+- **Frontend TypeScript types updated** — All v0.3 types mirrored in `types.ts`
+
+### Design Principles
+
+This release follows the principle established by the Australian gym booking incident (August 2026): **a goal is not a blank check**. ActionGuard now understands:
+
+1. **What** the action touches (target class, sensitivity)
+2. **Who** owns the affected resource (ownership)
+3. **Where** the action has effect (externality)
+4. **What** consequences it produces (side effects, reversibility)
+5. **What** it means in context (correlation, chain detection)
+
+This evolves ActionGuard from:
+```
+Action → Facts → Policy → Decision
+```
+To:
+```
+Action → Facts → Context → Action History → Consequence → Policy → Risk Escalation → Decision
+```
+
+### Future Scope (v0.4+)
+
+- Network/Browser enforcement (Schema already supports `externality: external_system`)
+- Runtime sandboxing (L3)
+- OS-level enforcement (L4)
+- Action Identity (actor, session, parent_action correlation)
+
 **Product positioning.** ActionGuard is explicitly a **local, vendor-neutral
 safety layer for AI-powered automation** — a unified Action Policy / Evidence
 layer across all automation sources, not "another exec approval" for any

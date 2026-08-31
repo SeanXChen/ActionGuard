@@ -7,6 +7,10 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [vue()],
 
+  // Use relative asset paths so the app works both in dev (localhost)
+  // and in release (loaded from disk via tauri://localhost).
+  base: "./",
+
   // Vite options tailored for Tauri development.
   clearScreen: false,
   server: {
