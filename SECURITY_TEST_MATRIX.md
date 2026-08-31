@@ -1,12 +1,12 @@
 # ActionGuard Security Test Matrix
 
-> **Purpose.** This document records, for every action category ActionGuard v0.2 supports, exactly which execution paths we **Enforce** (block before the action runs), which we **Observe only** (record after the action runs), and which we cannot see at all (**Unsupported**).
+> **Purpose.** This document records, for every action category ActionGuard v0.3 supports, exactly which execution paths we **Enforce** (block before the action runs), which we **Observe only** (record after the action runs), and which we cannot see at all (**Unsupported**).
 >
-> Security products should under-promise. If a developer believes they are protected when they are not, the safety layer becomes a liability. This matrix is the source of truth for v0.2's security claims.
+> Security products should under-promise. If a developer believes they are protected when they are not, the safety layer becomes a liability. This matrix is the source of truth for v0.3's security claims.
 
 ---
 
-## Execution Path Matrix (v0.2)
+## Execution Path Matrix (v0.3)
 
 > **Update (2026-08-19).** v0.2 no longer claims "Protected" as a blanket label. ActionGuard protects **execution paths**, not software brands. Every platform has paths that are enforced and paths that are known bypasses. This table is surfaced in the GUI (`Live` view) and the CLI (`actionguard status`, `actionguard protect`) so nobody has to guess.
 >
@@ -531,7 +531,7 @@ The answer must come from a real test with a real agent. Not from a unit test th
 
 If a real agent's actions bypass the hook 100% of the time, ActionGuard is not a real security product — it's a file watcher with delusions of grandeur. If a real agent's actions flow through a hookable Action boundary, ActionGuard has a real value proposition. Both outcomes are valuable.
 
-The current state: **one real agent has been measured** (CodeBuddy → `powershell -Command`, 2026-08-19 — no boundary, observe-only), and **every other agent is "we don't know yet"** until measured through the protocol above. That is the honest position to ship.
+The current state: **one real automation adapter has been measured**: CodeBuddy → PreToolUse hook: **ENFORCED** — `sudo rm -rf /` blocked before execution (2026-08-19). Protected-shell boundaries are also covered by their own real-machine tests. Cursor and Claude Code adapters are available but remain **not independently verified** until each has a reproducible boundary test and ledger evidence. Every other agent remains "we don't know yet" until measured through the protocol above. That is the honest position to ship.
 
 ---
 

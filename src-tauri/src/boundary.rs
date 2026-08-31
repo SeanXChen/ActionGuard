@@ -18,6 +18,43 @@
 use crate::models::BoundaryKind;
 use crate::storage;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+/// Run a command with CREATE_NO_WINDOW on Windows so no CMD window flashes.
+/// On non-Windows platforms, behaves identically to `Command::new`.
+fn no_window_cmd(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let _ = program; // consumed above
+    cmd
+}
+
+/// Cache for detect_boundaries — avoids re-running tasklist/pgrep on every call.
+/// Stale after 5 seconds so app state changes (e.g. starting Cursor) are reflected.
+#[allow(clippy::type_complexity)]
+static DETECT_CACHE: std::sync::LazyLock<Mutex<Option<(Instant, Vec<BoundaryDescriptor>)>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
+
+const DETECT_CACHE_TTL: Duration = Duration::from_secs(5);
+
+/// Cached detect_boundaries — returns cached result if still fresh.
+pub fn detect_boundaries_cached() -> Vec<BoundaryDescriptor> {
+    let mut cache = DETECT_CACHE.lock().unwrap();
+    match cache.as_ref() {
+        Some((instant, boundaries)) if instant.elapsed() < DETECT_CACHE_TTL => {
+            return boundaries.clone();
+        }
+        _ => {}
+    }
+    let boundaries = detect_boundaries();
+    *cache = Some((Instant::now(), boundaries.clone()));
+    boundaries
+}
 
 /// How a registry row's `enforcement` claim was established. This is the
 /// `Core Verified` / `Community Verified` distinction — a green checkmark is
@@ -498,7 +535,7 @@ pub fn detect_boundaries() -> Vec<BoundaryDescriptor> {
         match d.name.as_str() {
             "Protected Shell (bash/zsh/fish)" => {
                 // Live probe: is a bash-family shell actually available?
-                let shell_present = std::process::Command::new("bash")
+                let shell_present = no_window_cmd("bash")
                     .arg("--version")
                     .output()
                     .map(|o| o.status.success())
@@ -576,6 +613,28 @@ pub fn detect_boundaries() -> Vec<BoundaryDescriptor> {
             // machine by definition. Until then the honest answer is
             // NotDetected: "documented" (the YAML registry) must never be
             // reported as "detected" or "observed" on this machine.
+            "Cursor" => {
+                let home = dirs::home_dir();
+                let hooks_json = home.map(|h| h.join(".cursor").join("hooks.json"));
+                let hook_configured = hooks_json.as_ref().map(|p| {
+                    p.exists() && std::fs::read_to_string(p)
+                        .map(|s| s.contains("beforeShellExecution") && (s.contains("actionguard") || s.contains("ag-")))
+                        .unwrap_or(false)
+                }).unwrap_or(false);
+                d.detected = hook_configured;
+                if hook_configured {
+                    // A configured hook is not evidence that the host invoked it or
+                    // honoured a deny. Keep the registry honest until a boundary
+                    // test and ledger evidence prove this exact integration.
+                    d.status = BoundaryStatus::ObserveOnly;
+                    d.last_verified.clear();
+                    d.note = "ActionGuard hook configured in ~/.cursor/hooks.json; integration is detected but not independently verified, so no enforcement claim is made.".into();
+                } else {
+                    d.status = BoundaryStatus::NotDetected;
+                    d.last_verified.clear();
+                    d.note = "Cursor installed (3.11.13) — no ActionGuard hook detected in ~/.cursor/hooks.json; defaults fail-open. Run `actionguard setup` to install.".into();
+                }
+            }
             _ => {
                 d.status = BoundaryStatus::NotDetected;
                 d.detected = false;
@@ -670,7 +729,7 @@ fn extract_quoted_path(raw: &str, needle: &str) -> Option<PathBuf> {
 fn codebuddy_running() -> bool {
     #[cfg(target_os = "windows")]
     {
-        match std::process::Command::new("tasklist")
+        match no_window_cmd("tasklist")
             .args(["/FO", "CSV", "/NH"])
             .output()
         {
@@ -683,7 +742,7 @@ fn codebuddy_running() -> bool {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        std::process::Command::new("pgrep")
+        no_window_cmd("pgrep")
             .arg("-f")
             .arg("CodeBuddy")
             .status()

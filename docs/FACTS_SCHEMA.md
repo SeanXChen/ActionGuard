@@ -1,6 +1,13 @@
 # Facts Schema — ActionGuard 的"事实层"语言
 
-> 状态：v0.2 定稿（2026-08-24）
+> 版本：2.0（v0.3）
+> 引入版本：v0.3
+> 状态：当前
+>
+> 变更历史：
+> - v0.2 = 基础 Facts（Action / Category / Risk / Decision）
+> - v0.3 = Contextual Facts（TargetClass / Ownership / Externality / SideEffect / Reversibility / SensitivityLevel / Provenance / Action Correlation）
+>
 > 原则：**规则面向 Facts 写，不面向原始字符串。**
 > 发现新边界时，先问"它对应什么 Fact"，再写规则——而不是直接抄命令字符串。
 

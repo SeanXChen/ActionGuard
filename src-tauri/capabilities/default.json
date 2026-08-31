@@ -13,6 +13,11 @@
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "core:event:allow-listen",
-    "core:event:allow-unlisten"
+    "core:event:allow-unlisten",
+    "autostart:allow-is-enabled",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "opener:default",
+    "opener:allow-open-url"
   ]
 }

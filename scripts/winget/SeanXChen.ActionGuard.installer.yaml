@@ -6,11 +6,11 @@
 # 3. Validate locally: winget install --manifest .\scripts\winget
 # 4. Submit to microsoft/winget-pkgs.
 PackageIdentifier: SeanXChen.ActionGuard
-PackageVersion: 0.2.0
+PackageVersion: 0.3.0
 InstallerType: nullsoft
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/SeanXChen/ActionGuard/releases/download/v0.2.0/ActionGuard_0.2.0_x64-setup.exe
+    InstallerUrl: https://github.com/SeanXChen/ActionGuard/releases/download/v0.3.0/ActionGuard_0.3.0_x64-setup.exe
     InstallerSha256: <FILL_AFTER_RELEASE>
     Scope: user
     InstallerSwitches:

@@ -52,7 +52,7 @@ automation actually executes.
 | CodeBuddy | ✅ Core Verified | 2026-08-19 |
 | Claude Code | ? Not verified | 2026-08-19 |
 | Codex | ? Not verified | 2026-08-19 |
-| Cursor | ? Not verified | 2026-08-19 |
+| Cursor | 🔬 Adapter available — not independently verified | — |
 | Windsurf | ? Not verified | 2026-08-19 |
 | OpenClaw | ? Investigating | — |
 | Manus Desktop | ? Investigating | 2026-08-19 |
@@ -117,9 +117,9 @@ community: the standard is about the boundary, never about the brand.
 | Protected Shell (bash/zsh/fish) | **C** Protected Shell | ✅ | preexec hook | **Enforced** (interactive) | 2026-08-19 |
 | PowerShell — interactive (PSReadLine) | **C** Protected Shell | ✅ | interactive line hook (Phase C) | **Enforced** — requires active session | 2026-08-21 |
 | PowerShell — scripts / `-Command` / piped stdin | **C** Protected Shell | ✅ | no hookable boundary | Observe-only (known bypass) | 2026-08-21 |
-| Claude Code | **A** Tool Hook (documented) | ✅ | official `PreToolUse`/`PostToolUse` hooks (settings.json), exit 2 = deny | Not installed here — documented only | 2026-08-19 |
+| Claude Code | **A** Tool Hook (documented) | ✅ | official `PreToolUse`/`PostToolUse` hooks (`settings.json`), exit 2 = deny | Adapter available — not independently verified | — |
 | Codex | **B** Exec Approval | ✅ | built-in `approval_policy` — **no third-party hook protocol** | N/A via hook | 2026-08-19 |
-| Cursor | **A** Tool Hook (probed) | ✅ | official `hooks.json` — `beforeShellExecution` / `preToolUse` | Not configured (defaults fail-open) | 2026-08-19 |
+| Cursor | **A** Tool Hook | ✅ | official `hooks.json` — `beforeShellExecution` | Adapter available — not independently verified | — |
 | Windsurf | **A** Tool Hook (documented) | ✅ | official Cascade Hooks (pre/post; docs under Devin) | Not installed here — documented only | 2026-08-19 |
 | OpenCode | **A** unverified | ✅ | needs a real pre-action hook probe | TBD | — |
 | Manus Cloud | **F** Remote | ❌ | remote sandbox | N/A from this machine | 2026-08-19 |
@@ -237,21 +237,44 @@ built-in and not extensible by ActionGuard.
 | 5 | Can ActionGuard enforce it? | **No hook point** — ActionGuard cannot attach as a pre-action layer |
 | 6 | Last verified? | 2026-08-19 (documentation research; no live probe) |
 
-### Cursor — Class A (Tool Hook, probed on this machine)
+### Cursor — Class A (Tool Hook) — adapter available, not independently verified
 
 Real probe on 2026-08-19: Cursor **3.11.13** installed on this machine
-(`D:\cursor` + `%LOCALAPPDATA%\Programs\cursor`). The boundary mechanism is
-confirmed in the installed binary (`beforeShellExecution` strings); no
-ActionGuard hook is attached yet.
+(`D:\cursor` + `%LOCALAPPDATA%\Programs\cursor`).
+
+The adapter is implemented, but this release does not include reproducible
+Cursor boundary-test and ledger evidence for the current integration.
 
 | # | Question | Answer |
 |---|---|---|
 | 1 | Does it execute locally? | **YES** — installed 3.11.13 on this machine |
 | 2 | Where does the action enter? | Official `hooks.json` — `beforeShellExecution`, `preToolUse`, `beforeMCPExecution`, `beforeReadFile` (user `~/.cursor/hooks.json`; project `.cursor/hooks.json`) |
-| 3 | Is there a pre-action boundary? | **YES** — `beforeShellExecution` / `preToolUse` can `permission: deny` (exit 2, Claude Code-compatible) or rewrite inputs; `failClosed` option |
-| 4 | Can ActionGuard observe it? | Mechanism confirmed (binary probe); no ActionGuard hook attached, so nothing is observed yet |
-| 5 | Can ActionGuard enforce it? | **Not configured** — `~/.cursor/hooks.json` absent; defaults **fail-open** |
-| 6 | Last verified? | 2026-08-19 (install + binary probe; no hook attached) |
+| 3 | Is there a pre-action boundary? | **YES** — `beforeShellExecution` fires before each terminal command; can `deny`, `confirm`, or `allow` |
+| 4 | Can ActionGuard observe it? | Adapter can log evaluated commands, but this path is not independently verified in v0.3. |
+| 5 | Can ActionGuard enforce it? | **Not verified.** The adapter is fail-closed on its own failures, but ActionGuard does not claim Cursor honoured a deny without a reproducible boundary test. |
+| 6 | Last verified? | — |
+
+**Hook adapter**: `scripts/hooks/ag-cursor-hook.py` — calls `actionguard policy-check` on stdin payload, maps result to Cursor hook response format.
+**Config**: `~/.cursor/hooks.json` — `beforeShellExecution` → `python ~/.actionguard/hooks/cursor-hook.py` (installed by `actionguard setup`; hook script lives under `~/.actionguard/hooks/` for auditable management)
+
+**Upgrade path**: Running `actionguard setup` again migrates any legacy hook paths to the canonical `~/.actionguard/hooks/` location.
+
+### Claude Code — Class A (Tool Hook) — hook adapter available
+
+Claude Code's official `PreToolUse` hook (documented; not installed on this machine). `actionguard setup` auto-detects Claude Code and installs the hook script + updates `~/.claude/settings.json`.
+
+| # | Question | Answer |
+|---|---|---|
+| 1 | Does it execute locally? | **YES** — local CLI (`claude` command) |
+| 2 | Where does the action enter? | Official `hooks.PreToolUse` in `~/.claude/settings.json` — stdin JSON → adapter → engine |
+| 3 | Is there a pre-action boundary? | **YES** — `PreToolUse` fires before every tool call; `exit 2` = deny |
+| 4 | Can ActionGuard observe it? | Adapter can log evaluated commands, but this path is not independently verified in v0.3. |
+| 5 | Can ActionGuard enforce it? | **Not verified.** The adapter is present, but Claude Code is not installed on this machine and no live boundary test exists. |
+| 6 | Last verified? | — |
+
+**Hook adapter**: embedded in `actionguard setup` → written to `~/.actionguard/hooks/claude-hook.py`
+**Config**: `~/.claude/settings.json` — `PreToolUse` → `python ~/.actionguard/hooks/claude-hook.py`
+**Activation**: Run `actionguard setup` — auto-detects Claude Code and installs if present
 
 ### Windsurf — Class A (Tool Hook, documented)
 

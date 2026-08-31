@@ -6,6 +6,8 @@ import type {
   ApprovalRequest,
   ApprovalResolution,
   BatchData,
+  CoverageItem,
+  CoveragePayload,
   Decision,
   ExecutionPath,
   LedgerEntry,
@@ -55,5 +57,16 @@ export const api = {
   previewLearnRule: (action: Action, decision: Decision) =>
     invoke<Rule>("preview_learn_rule", { action, decision }),
   // --- v0.2 Execution Path Matrix ---
-  getEnforcementPaths: () => invoke<ExecutionPath[]>("get_enforcement_paths"),
+  getEnforcementPaths: () => {
+    console.log("[API] getEnforcementPaths called");
+    return invoke<ExecutionPath[]>("get_enforcement_paths");
+  },
+  // --- Coverage dashboard ---
+  getCoverage: () => invoke<CoveragePayload>("get_coverage"),
+  // --- Autostart (uses tauri-plugin-autostart JS API) ---
+  getAutostartEnabled: () => invoke<boolean>("plugin:autostart|isEnabled"),
+  setAutostartEnabled: (enabled: boolean) =>
+    enabled
+      ? invoke("plugin:autostart|enable")
+      : invoke("plugin:autostart|disable"),
 };

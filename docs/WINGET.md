@@ -18,7 +18,7 @@ Download → Verify checksum → Install
 `winget` validates the installer URL and `InstallerSha256` against a **real**
 GitHub Release, so the installer must exist and be final before submission.
 
-1. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`
+1. Tag and push: `git tag v0.3.0 && git push origin v0.3.0`
 2. The Release workflow builds installers (MSI + NSIS on Windows) and creates
    a **draft** release with a `SHA256SUMS` file.
 3. Manually smoke-test the NSIS installer on a clean VM, then publish the
@@ -34,7 +34,7 @@ InstallerSha256: <value>
 
 ```powershell
 # from the download folder
-Get-FileHash .\ActionGuard_0.2.0_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\ActionGuard_0.3.0_x64-setup.exe -Algorithm SHA256
 ```
 
 ## 3. Validate locally
@@ -47,8 +47,8 @@ winget install --manifest .\scripts\winget
 
 1. Fork https://github.com/microsoft/winget-pkgs
 2. Copy `scripts/winget/` as
-   `manifests/s/Se/SeanXChen.ActionGuard/0.2.0/`
-3. Open a PR titled `New version: SeanXChen.ActionGuard version 0.2.0`
+   `manifests/s/Se/SeanXChen.ActionGuard/0.3.0/`
+3. Open a PR titled `New version: SeanXChen.ActionGuard version 0.3.0`
 4. The validation bot checks the hash and URL; a human maintainer approves.
 
 ## 5. Installer signing (roadmap)

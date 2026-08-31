@@ -59,3 +59,4 @@ mod git;
 mod package;
 mod secrets;
 mod shell;
+mod correlation;

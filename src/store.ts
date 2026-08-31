@@ -5,6 +5,8 @@ import type {
   ActiveStatsPayload,
   ApprovalRequest,
   BatchData,
+  CoverageItem,
+  CoveragePayload,
   Counts,
   CountsPayload,
   LedgerEntry,
@@ -14,7 +16,7 @@ import type {
   SessionSummary,
 } from "./types";
 
-export type View = "home" | "session" | "review" | "history";
+export type View = "dashboard" | "activity" | "review" | "policies" | "boundaries" | "settings";
 
 export interface ParaStats {
   n: number;
@@ -51,6 +53,11 @@ interface StoreState {
   startupArgs: { workspace: string | null; mode: SessionMode } | null;
   // v0.2 consumer onboarding: first-run experience separate from the dashboard.
   onboardingDone: boolean;
+  // Coverage dashboard — auto-detected boundary protection status.
+  coverage: CoveragePayload | null;
+  coverageLoaded: boolean;
+  // Global dropdown portal
+  dd: { isOpen: boolean; x: number; y: number };
 }
 
 function emptyPara(): ParaStats {
@@ -77,7 +84,7 @@ function readOnboardingDone(): boolean {
 }
 
 const state = reactive<StoreState>({
-  view: "home",
+  view: "dashboard",
   session: null,
   total: { create: 0, modify: 0, delete: 0, rename: 0 },
   batch: { create: 0, modify: 0, delete: 0, rename: 0 },
@@ -95,6 +102,9 @@ const state = reactive<StoreState>({
   pendingApprovals: [],
   startupArgs: null,
   onboardingDone: readOnboardingDone(),
+  coverage: null,
+  coverageLoaded: false,
+  dd: { isOpen: false, x: 0, y: 0 },
 });
 
 let listening = false;
@@ -239,7 +249,6 @@ export function useStore() {
     state.startupArgs = await api.getStartupArgs();
     if (active) {
       state.session = active;
-      state.view = "session";
       await Promise.all([
         refreshActiveStats(),
         refreshLedger(),
@@ -276,6 +285,22 @@ export function useStore() {
     }
   }
 
+  async function refreshCoverage() {
+    try {
+      state.coverage = await api.getCoverage();
+      state.coverageLoaded = true;
+    } catch {
+      /* ignore — coverage is best-effort */
+    }
+  }
+
+  function openDd(x: number, y: number) {
+    state.dd = { isOpen: true, x, y };
+  }
+  function closeDd() {
+    state.dd.isOpen = false;
+  }
+
   return {
     state: readonly(state),
     init,
@@ -288,5 +313,8 @@ export function useStore() {
     refreshPendingApprovals,
     resolveApproval,
     completeOnboarding,
+    refreshCoverage,
+    openDd,
+    closeDd,
   };
 }

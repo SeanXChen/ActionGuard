@@ -1,6 +1,6 @@
 # ActionGuard Architecture
 
-本文档描述 ActionGuard v0.2 的核心架构、数据模型和设计决策。
+本文档描述 ActionGuard v0.3 的核心架构、数据模型和设计决策。
 
 ---
 

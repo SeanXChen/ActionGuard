@@ -10,6 +10,21 @@
 use crate::models::{
     Action, ActionCategory, Decision, DecisionResult, PolicySet, RiskLevel, Rule,
 };
+use dirs;
+
+/// Expand `~` to the user's home directory for path matching.
+fn expand_tilde(path: &str) -> String {
+    if let Some(stripped) = path.strip_prefix('~') {
+        if let Some(home) = dirs::home_dir() {
+            let home_str = home.to_string_lossy();
+            if stripped.is_empty() {
+                return home_str.to_string();
+            }
+            return format!("{}{}", home_str, stripped);
+        }
+    }
+    path.to_string()
+}
 
 /// Decide what to do with an action. Returns the matched rule's decision
 /// (or the fallback allow + risk engine result when nothing matched).
@@ -62,8 +77,8 @@ fn matches_spec(action: &Action, rule: &Rule) -> bool {
 
     // Path filter (wildcard). Empty for non-File categories.
     if let Some(pattern) = &m.path {
-        let path = action.path_str();
-        if path.is_empty() || !wildcard_match(pattern, path) {
+        let path = expand_tilde(action.path_str());
+        if path.is_empty() || !wildcard_match(pattern, &path) {
             return false;
         }
     }
@@ -71,7 +86,8 @@ fn matches_spec(action: &Action, rule: &Rule) -> bool {
     // args_contains: every substring must appear somewhere in the target
     // (AND semantics). Use it for required arguments that are all mandatory.
     if let Some(needles) = &m.args_contains {
-        let target = action.target_str().to_lowercase();
+        // Expand ~ so `~/.aws/credentials` matches `.aws/credentials`.
+        let target = expand_tilde(action.target_str()).to_lowercase();
         for n in needles {
             if !target.contains(&n.to_lowercase()) {
                 return false;
@@ -83,7 +99,7 @@ fn matches_spec(action: &Action, rule: &Rule) -> bool {
     // synonym flags such as `-9` / `-KILL` / `-SIGKILL` — with `args_contains`
     // those rules would silently never fire for every spelling but the first.
     if let Some(needles) = &m.args_any {
-        let target = action.target_str().to_lowercase();
+        let target = expand_tilde(action.target_str()).to_lowercase();
         if !needles.iter().any(|n| target.contains(&n.to_lowercase())) {
             return false;
         }

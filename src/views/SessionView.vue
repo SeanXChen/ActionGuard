@@ -101,7 +101,7 @@ async function endSession() {
   error.value = null;
   try {
     await api.stopSession();
-    setView("home");
+    setView("dashboard");
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -115,7 +115,7 @@ async function undoNow() {
   error.value = null;
   try {
     await api.undoActiveSession();
-    setView("home");
+    setView("dashboard");
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -139,7 +139,7 @@ const sessionTitle = computed(() => {
   <div v-if="!state.session" class="empty">
     <div class="big">◈</div>
     <p>{{ t("monitor.noActive") }}</p>
-    <button class="btn" @click="setView('home')">{{ t("monitor.goStart") }}</button>
+    <button class="btn" @click="setView('dashboard')">{{ t("monitor.goStart") }}</button>
   </div>
 
   <div v-else class="monitor">
@@ -276,7 +276,7 @@ const sessionTitle = computed(() => {
         <button class="btn" @click="setView('review')">
           🔎 {{ t("monitor.riskBanner.review") }}
         </button>
-        <button class="btn btn-primary" @click="api.allowBatch(); setView('session')">
+        <button class="btn btn-primary" @click="api.allowBatch(); setView('dashboard')">
           ✓ {{ t("monitor.riskBanner.allow") }}
         </button>
         <button class="btn btn-danger" @click="api.denyBatch()">
@@ -307,7 +307,7 @@ const sessionTitle = computed(() => {
           <span v-if="undoing" class="spin small"></span>
           ↶ {{ undoing ? t("monitor.undoing") : t("monitor.undo") }}
         </button>
-        <button class="btn btn-ghost" @click="setView('history')">
+        <button class="btn btn-ghost" @click="setView('activity')">
           ⏳ {{ t("monitor.history") }}
         </button>
       </div>

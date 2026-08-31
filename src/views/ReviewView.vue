@@ -1,436 +1,163 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { api } from "../api";
-import ActionList from "../components/ActionList.vue";
-import RiskBadge from "../components/RiskBadge.vue";
 import { useStore } from "../store";
 import { useI18n } from "../i18n";
-import type { BatchData } from "../types";
 
-const { state, setView } = useStore();
-const { t } = useI18n();
+const { state } = useStore();
+const { t, tf } = useI18n();
 
-const pending = computed<BatchData | null>(() => state.pendingBatch as BatchData | null);
-
-const batchTotal = computed(() => {
-  const c = pending.value?.counts;
-  if (!c) return 0;
-  return c.create + c.modify + c.delete + c.rename;
-});
-
-const busy = ref(false);
-const error = ref<string | null>(null);
-
-async function allow() {
-  if (!pending.value || busy.value) return;
-  busy.value = true;
-  error.value = null;
-  try {
-    await api.allowBatch();
-    setView("session");
-  } catch (e) {
-    error.value = String(e);
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function deny() {
-  if (!pending.value || busy.value) return;
-  busy.value = true;
-  error.value = null;
-  try {
-    await api.denyBatch();
-    setView("home");
-  } catch (e) {
-    error.value = String(e);
-  } finally {
-    busy.value = false;
-  }
-}
+function back() { void 0; }
 </script>
 
 <template>
-  <div v-if="!pending || !state.session" class="empty card">
-    <div class="big-check">✓</div>
-    <p class="empty-title">{{ t("review.empty") }}</p>
-    <button class="btn" @click="setView('session')">→ {{ t("review.back") }}</button>
-  </div>
-
-  <div v-else class="review">
-    <div class="warn-head card">
-      <div class="warn-row">
-        <RiskBadge level="high" />
-        <div class="sigil">⚠</div>
+  <div class="view-shell">
+    <div class="page-header">
+      <button class="back-btn" @click="back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="back-ico"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        {{ t("page.back") }}
+      </button>
+      <div class="header-meta">
+        <h1 class="page-title">{{ t("review.title") }}</h1>
+        <p class="page-desc">{{ t("review.desc") }}</p>
       </div>
-      <h1 class="title">{{ t("review.head.title") }}</h1>
-      <p class="subtitle">
-        {{ t("review.head.subtitle1") }} <strong>{{ batchTotal }}</strong>
-        {{ t("review.head.subtitle2") }}
-      </p>
-    </div>
-
-    <div class="count-grid">
-      <div class="count-cell count-create">
-        <div class="k">{{ t("review.counts.create") }}</div>
-        <div class="v">{{ pending.counts.create }}</div>
-      </div>
-      <div class="count-cell count-modify">
-        <div class="k">{{ t("review.counts.modify") }}</div>
-        <div class="v">{{ pending.counts.modify }}</div>
-      </div>
-      <div class="count-cell count-delete">
-        <div class="k">{{ t("review.counts.delete") }}</div>
-        <div class="v">{{ pending.counts.delete }}</div>
-      </div>
-      <div class="count-cell count-rename">
-        <div class="k">{{ t("review.counts.rename") }}</div>
-        <div class="v">{{ pending.counts.rename }}</div>
-      </div>
-    </div>
-
-    <div v-if="pending.risk.sensitive.length" class="warn-box sensitive card">
-      <div class="wb-title">⚠ {{ t("review.sensitive.title") }}
-        <span class="count-pill">{{ pending.risk.sensitive.length }}</span>
-      </div>
-      <div class="wb-paths">
-        <span v-for="p in pending.risk.sensitive" :key="p" class="path-chip">{{ p }}</span>
-      </div>
-      <p class="wb-note">
-        ⚡ {{ t("review.sensitive.note") }}
-      </p>
-    </div>
-
-    <div v-if="pending.risk.outside.length" class="warn-box outside card">
-      <div class="wb-title">
-        ⚠ {{ t("review.outside.title") }}
-        <span class="count-pill danger">{{ pending.risk.outside.length }}</span>
-      </div>
-      <div class="wb-paths">
-        <span v-for="p in pending.risk.outside" :key="p" class="path-chip danger">{{ p }}</span>
-      </div>
-      <p class="wb-note">
-        ⚡ {{ t("review.outside.note") }}
-      </p>
-    </div>
-
-    <div class="card reasons">
-      <h3>{{ t("review.reasons.title") }}</h3>
-      <ul>
-        <li v-for="(r, i) in pending.risk.reasons" :key="i">
-          <span class="bull">•</span>
-          {{ r }}
-        </li>
-      </ul>
     </div>
 
     <div class="card">
-      <h3>{{ t("review.changes.title") }}</h3>
-      <ActionList :actions="pending.actions" :limit="100" />
-    </div>
-
-    <div class="buttons card">
-      <div class="brow">
-        <button class="btn btn-primary big" :disabled="busy" @click="allow">
-          <span v-if="busy" class="spin small"></span>
-          {{ busy ? t("review.working") : `✓ ${t("review.allow")}` }}
-        </button>
-        <button class="btn btn-danger big" :disabled="busy" @click="deny">
-          <span v-if="busy" class="spin small"></span>
-          {{ busy ? t("review.restoring") : `↶ ${t("review.deny")}` }}
-        </button>
+      <!-- Has pending approvals -->
+      <div v-if="state.pendingApprovals && state.pendingApprovals.length > 0" class="pending-list">
+        <div class="pending-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          {{ tf("review.pending.count", { count: String(state.pendingApprovals.length) }) }}
+        </div>
+        <!-- Approval cards handled by ApprovalModal.vue in App.vue -->
       </div>
-      <p v-if="error" class="error">{{ error }}</p>
+
+      <!-- Empty state: no pending -->
+      <div v-else class="empty-state">
+        <div class="e-ico-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="e-ico"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <div class="e-k">{{ t("empty.noPending.k") }}</div>
+        <p class="e-v">{{ t("empty.noPending.v") }}</p>
+      </div>
     </div>
 
-    <p class="disclaimer">
-      • {{ t("review.disclaimer1") }}<br />
-      • {{ t("review.disclaimer2") }}
-    </p>
+    <!-- Recent decisions -->
+    <div class="card">
+      <div class="section-header">
+        <h2 class="section-title">{{ t("review.recentDecisions") }}</h2>
+      </div>
+      <div v-if="state.ledger.length === 0" class="empty-state small">
+        <div class="e-k">{{ t("empty.noActivity.k") }}</div>
+        <p class="e-v">{{ t("empty.noActivity.v") }}</p>
+      </div>
+      <div v-else class="recent-decisions">
+        <div class="rd-tbl-header">
+          <div class="rh-col rh-time">{{ t("activity.col.time") }}</div>
+          <div class="rh-col rh-act">{{ t("activity.col.action") }}</div>
+          <div class="rh-col rh-decision">{{ t("review.decision") }}</div>
+        </div>
+        <div v-for="(entry, i) in state.ledger.slice(0, 10)" :key="i" class="rd-row">
+          <div class="rh-col rh-time">
+            <span class="t-time mono">{{ entry.timestamp }}</span>
+          </div>
+          <div class="rh-col rh-act">
+            <div class="act-target mono">{{ entry.target || "—" }}</div>
+            <div class="act-cat">{{ entry.category }}</div>
+          </div>
+          <div class="rh-col rh-decision">
+            <span class="res" :class="entry.decision === 'allow' ? 'res-allow' : entry.decision === 'deny' ? 'res-block' : 'res-ask'">
+              {{ entry.decision === "allow" ? t("decision.allow") : entry.decision === "deny" ? t("decision.deny") : t("decision.ask") }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.review {
-  max-width: 900px;
+.view-shell {
+  max-width: 1040px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
+  padding: 20px 24px 28px;
+}
+.page-header { display: flex; flex-direction: column; gap: 10px; }
+.back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid var(--border); padding: 7px 12px;
+  border-radius: 8px; color: var(--text-dim); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; font-family: var(--sans); width: fit-content;
+}
+.back-btn:hover { background: rgba(255,255,255,0.03); color: var(--green); border-color: rgba(163,230,53,0.3); }
+.back-ico { width: 13px; height: 13px; }
+.header-meta { display: flex; flex-direction: column; gap: 4px; }
+.page-title { font-size: 22px; font-weight: 800; letter-spacing: 0.2px; color: var(--text); margin: 0; }
+.page-desc { color: var(--text-dim); font-size: 12.5px; line-height: 1.55; margin: 0; }
+
+.card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px 22px;
 }
 
-.empty {
-  max-width: 520px;
-  margin: 60px auto;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: center;
-  padding: 42px 30px;
+.pending-hint {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 10px;
+  background: rgba(234,179,8,.10); border: 1px solid rgba(234,179,8,.28);
+  color: #eab308; font-size: 13px; font-weight: 700;
+  margin-bottom: 4px;
 }
 
-.big-check {
-  width: 62px;
-  height: 62px;
-  border-radius: 50%;
-  background: var(--green-glow);
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  color: var(--green);
-  display: grid;
-  place-items: center;
-  font-size: 32px;
-  font-weight: 900;
+.empty-state {
+  padding: 44px 16px; display: flex; flex-direction: column;
+  align-items: center; gap: 10px; text-align: center;
 }
+.empty-state.small { padding: 28px 16px; }
+.e-ico-wrap {
+  width: 56px; height: 56px; border-radius: 14px;
+  background: rgba(163,230,53,.07); color: var(--green);
+  display: grid; place-items: center; margin-bottom: 4px;
+}
+.e-ico { width: 26px; height: 26px; }
+.e-k { font-size: 14px; font-weight: 700; color: var(--text); }
+.e-v { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin: 0; max-width: 400px; }
 
-.empty-title {
-  color: var(--text);
-  font-size: 15px;
-}
+.section-header { margin-bottom: 16px; }
+.section-title { font-size: 15px; font-weight: 700; color: var(--text); margin: 0; }
 
-.warn-head {
-  position: relative;
-  overflow: hidden;
+/* Recent decisions */
+.recent-decisions { display: flex; flex-direction: column; gap: 0; }
+.rd-tbl-header {
+  display: grid; grid-template-columns: 180px 1fr 130px;
+  gap: 12px; padding: 8px 12px;
+  border-bottom: 1px solid var(--border-soft); margin-bottom: 4px;
 }
+.rh-col {
+  font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-faint);
+}
+.rd-row {
+  display: grid; grid-template-columns: 180px 1fr 130px;
+  gap: 12px; align-items: center; padding: 10px 12px;
+  border-radius: 9px; transition: background 0.12s;
+}
+.rd-row:hover { background: rgba(255,255,255,0.02); }
+.rh-time { white-space: nowrap; }
+.rh-act { min-width: 0; }
+.rh-decision { }
+.t-time { color: var(--text-dim); font-size: 12px; }
+.act-target { color: var(--text); font-size: 12.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-cat { margin-top: 3px; color: var(--text-faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; font-family: var(--mono); }
 
-.warn-head::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(500px 200px at 100% 0%, rgba(239, 68, 68, 0.18), transparent 55%),
-    radial-gradient(500px 200px at 0% 100%, rgba(245, 158, 11, 0.12), transparent 55%);
-  pointer-events: none;
+.res {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px;
+  border-radius: 7px; font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0.2px; font-family: var(--mono);
 }
-
-.warn-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.sigil {
-  font-size: 18px;
-  color: #fca5a5;
-  font-weight: 900;
-}
-
-.warn-head .title {
-  font-size: 26px;
-  letter-spacing: 0.5px;
-  color: #fecaca;
-}
-
-.subtitle {
-  color: var(--text-dim);
-  font-size: 14px;
-  margin-top: 4px;
-  position: relative;
-  z-index: 1;
-}
-
-.subtitle strong {
-  font-family: var(--mono);
-  color: var(--text);
-  font-size: 20px;
-  margin: 0 4px;
-}
-
-.count-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-.count-cell {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  position: relative;
-  overflow: hidden;
-}
-.count-cell::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 3px;
-  opacity: 0.7;
-}
-.count-create::after { background: var(--blue); }
-.count-modify::after { background: var(--green); }
-.count-delete::after { background: var(--red); }
-.count-rename::after { background: var(--amber); }
-
-.count-cell .k {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text-faint);
-  margin-bottom: 8px;
-  font-family: var(--mono);
-}
-
-.count-cell .v {
-  font-family: var(--mono);
-  font-size: 30px;
-  font-weight: 700;
-  line-height: 1;
-}
-.count-create .v { color: var(--blue); }
-.count-modify .v { color: var(--green); }
-.count-delete .v { color: var(--red); }
-.count-rename .v { color: var(--amber); }
-
-.warn-box {
-  border-radius: var(--radius);
-  padding: 18px 20px;
-  border: 1px solid;
-}
-
-.warn-box.sensitive {
-  border-color: rgba(245, 158, 11, 0.45);
-  background: var(--amber-glow);
-}
-
-.warn-box.outside {
-  border-color: rgba(239, 68, 68, 0.45);
-  background: var(--red-glow);
-}
-
-.wb-title {
-  font-weight: 700;
-  font-size: 14px;
-  margin-bottom: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.count-pill {
-  display: inline-grid;
-  place-items: center;
-  min-width: 24px;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 999px;
-  background: rgba(245, 158, 11, 0.3);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  color: #fcd34d;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.count-pill.danger {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
-}
-
-.wb-paths {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.path-chip {
-  font-family: var(--mono);
-  font-size: 12px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border);
-  padding: 3px 9px;
-  border-radius: 5px;
-  color: #fcd34d;
-}
-
-.path-chip.danger {
-  color: #fca5a5;
-}
-
-.wb-note {
-  margin-top: 10px;
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-
-.reasons h3,
-.card h3 {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--text-dim);
-  margin-bottom: 10px;
-}
-
-.reasons ul {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13.5px;
-}
-
-.reasons li {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  line-height: 1.45;
-}
-
-.reasons .bull {
-  color: var(--red);
-  font-weight: 900;
-}
-
-.buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.brow {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.big {
-  padding: 13px 26px;
-  font-size: 14.5px;
-}
-
-.spin {
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  display: inline-block;
-}
-.spin.small {
-  width: 10px;
-  height: 10px;
-  border-width: 1.7px;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.error {
-  color: #fca5a5;
-  font-size: 12px;
-  font-family: var(--mono);
-}
-
-.disclaimer {
-  color: var(--text-faint);
-  font-size: 12px;
-  line-height: 1.6;
-  padding: 0 2px;
-}
+.res.res-allow { background: rgba(163,230,53,.10); color: var(--green); border: 1px solid rgba(163,230,53,.28); }
+.res.res-block { background: rgba(239,68,68,.10);  color: #f87171; border: 1px solid rgba(239,68,68,.28); }
+.res.res-ask   { background: rgba(234,179,8,.10);  color: #eab308; border: 1px solid rgba(234,179,8,.28); }
+.mono { font-family: var(--mono); }
 </style>

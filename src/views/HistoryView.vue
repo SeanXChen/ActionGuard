@@ -1,533 +1,374 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { api } from "../api";
-import ActionList from "../components/ActionList.vue";
-import RiskBadge from "../components/RiskBadge.vue";
 import { useStore } from "../store";
 import { useI18n } from "../i18n";
-import type { SessionDetails, SessionSummary } from "../types";
+import type { DictKey } from "../i18n";
+import RiskBadge from "../components/RiskBadge.vue";
+import type { LedgerEntry, Decision } from "../types";
 
-const { state, refreshSessions } = useStore();
-const { t, lang } = useI18n();
+const { state, refreshLedger, setView } = useStore();
+const { t, tf, lang } = useI18n();
 
-const detail = ref<SessionDetails | null>(null);
-const loading = ref(false);
-const error = ref<string | null>(null);
+function back() { setView("dashboard"); }
+onMounted(() => refreshLedger());
 
-async function load() {
-  loading.value = true;
-  error.value = null;
-  await refreshSessions();
-  loading.value = false;
-}
+type ActivityTab = "all" | "allowed" | "asked" | "blocked";
+type TabDef = { key: ActivityTab; labelKey: DictKey };
+const TABS: TabDef[] = [
+  { key: "all",     labelKey: "activity.tabs.all" },
+  { key: "allowed", labelKey: "activity.tabs.allowed" },
+  { key: "asked",   labelKey: "activity.tabs.asked" },
+  { key: "blocked", labelKey: "activity.tabs.blocked" },
+];
+const activeTab = ref<ActivityTab>("all");
+const search = ref("");
+const filterOpen = ref(false);
 
-onMounted(load);
+const PAGE_SIZE = 31;
+const page = ref(1);
 
-function groupLabel(dateStr: string): string {
-  const d = new Date(dateStr.replace(" ", "T"));
-  const today = new Date();
-  const yest = new Date();
-  yest.setDate(today.getDate() - 1);
-  const same = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  if (same(d, today)) return t("history.today");
-  if (same(d, yest)) return t("history.yesterday");
-  return d.toLocaleDateString(lang.value === "zh" ? "zh-CN" : undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-const grouped = computed(() => {
-  const map = new Map<string, SessionSummary[]>();
-  for (const s of state.sessions) {
-    const g = groupLabel(s.started_at);
-    if (!map.has(g)) map.set(g, []);
-    map.get(g)!.push(s);
-  }
-  return [...map.entries()];
+const filtered = computed(() => {
+  let items = state.ledger.slice();
+  if (activeTab.value === "allowed") items = items.filter((x) => x.decision === "allow" as Decision);
+  if (activeTab.value === "blocked") items = items.filter((x) => x.decision === "deny" as Decision);
+  if (activeTab.value === "asked")   items = items.filter((x) => x.decision === "ask" as Decision);
+  const q = search.value.trim().toLowerCase();
+  if (q) items = items.filter((x) =>
+    (x.target ?? "").toLowerCase().includes(q) ||
+    (x.category ?? "").toLowerCase().includes(q));
+  return items;
 });
 
-const stats = computed(() => state.paraStats);
-
-const rateColor = computed(() => {
-  const r = stats.value.rate;
-  if (r >= 50) return "red";
-  if (r >= 20) return "amber";
-  return "green";
+const paged = computed(() => {
+  const start = (page.value - 1) * PAGE_SIZE;
+  return filtered.value.slice(start, start + PAGE_SIZE);
 });
+const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / PAGE_SIZE)));
 
-function fmtDuration(secs: number) {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}m ${s.toString().padStart(2, "0")}s`;
+function goPage(n: number) {
+  if (n < 1 || n > pages.value) return;
+  page.value = n;
+}
+function pageWindow(): (number | "…")[] {
+  const p = pages.value, c = page.value;
+  if (p <= 7) return Array.from({ length: p }, (_, i) => i + 1);
+  const out: (number | "…")[] = [1];
+  if (c > 3) out.push("…");
+  for (let i = Math.max(2, c - 1); i <= Math.min(p - 1, c + 1); i++) out.push(i);
+  if (c < p - 2) out.push("…");
+  out.push(p);
+  return out;
 }
 
-function fmtTime(str: string) {
-  const d = new Date(str.replace(" ", "T"));
-  return d.toLocaleTimeString(lang.value === "zh" ? "zh-CN" : undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-async function openDetail(id: string) {
-  detail.value = null;
+function fmtTime(ts: string): string {
   try {
-    detail.value = await api.getSession(id);
-  } catch (e) {
-    error.value = String(e);
-  }
+    const d = new Date(ts.replace(" ", "T"));
+    return d.toLocaleTimeString(lang.value === "zh" ? "zh-CN" : undefined, {
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    });
+  } catch { return ts; }
 }
-
-const undoing = ref(false);
-
-async function undo(sessionId: string) {
-  if (undoing.value) return;
-  undoing.value = true;
-  error.value = null;
+function fmtDate(ts: string): string {
   try {
-    const res = await api.undoSession(sessionId);
-    await load();
-    if (detail.value?.summary.id === sessionId) {
-      await openDetail(sessionId);
-    }
-    const lines = [
-      `${t("history.undoDone")}`,
-      "",
-      `${t("history.detail.actions").replace(/\).*/, "")}: ${res.restored_files})`,
-    ];
-    const extra = [
-      res.deleted_files ? `- Deleted ${res.deleted_files} file(s) created after snapshot` : "",
-      res.removed_dirs ? `- Removed ${res.removed_dirs} dir(s)` : "",
-      res.skipped ? `- Skipped ${res.skipped} unchanged file(s)` : "",
-    ].filter(Boolean);
-    alert([...lines, ...extra].join("\n"));
-  } catch (e) {
-    error.value = String(e);
-  } finally {
-    undoing.value = false;
-  }
+    const d = new Date(ts.replace(" ", "T"));
+    return d.toLocaleDateString(lang.value === "zh" ? "zh-CN" : undefined, {
+      month: "short", day: "numeric",
+    });
+  } catch { return ""; }
+}
+function resultClass(e: Readonly<LedgerEntry>): string {
+  if (e.decision === "allow") return "res-allow";
+  if (e.decision === "deny")  return "res-block";
+  return "res-ask";
+}
+function resultKey(e: Readonly<LedgerEntry>): DictKey {
+  if (e.decision === "allow") return "decision.allow";
+  if (e.decision === "deny")  return "decision.deny";
+  return "decision.ask";
+}
+function sourceLabel(e: Readonly<LedgerEntry>): string {
+  return (e as any).agent || (e as any).source || "Terminal";
+}
+function rowMenuOpen(id: string): boolean { return rowMenu.value === id; }
+const rowMenu = ref<string | null>(null);
+function toggleRowMenu(e: Event, id: string) {
+  e.stopPropagation();
+  rowMenu.value = rowMenu.value === id ? null : id;
 }
 </script>
 
 <template>
-  <div class="history">
-    <div class="page-head">
-      <div>
-        <h1 class="title">{{ t("history.title") }}</h1>
-        <p class="subtitle">
-          {{ t("history.rateNote") }}
-        </p>
-      </div>
-      <button class="btn btn-ghost" @click="load">
-        ↻
+  <div class="view-shell">
+    <div class="page-header">
+      <button class="back-btn" @click="back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="back-ico"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        {{ t("page.back") }}
       </button>
-    </div>
-
-    <div class="stats">
-      <div class="stat card">
-        <div class="sv">{{ stats.n }}</div>
-        <div class="sk">{{ t("history.stat.sessions") }}</div>
-      </div>
-      <div class="stat card">
-        <div class="sv red">{{ stats.high }}</div>
-        <div class="sk">{{ t("history.stat.high") }}</div>
-      </div>
-      <div class="stat card">
-        <div class="sv purple">{{ stats.critical }}</div>
-        <div class="sk">{{ t("history.stat.critical") }}</div>
-      </div>
-      <div class="stat card">
-        <div class="sv amber">{{ stats.actionsBlocked.toLocaleString() }}</div>
-        <div class="sk">{{ t("history.stat.blocked") }}</div>
-      </div>
-      <div class="stat card rate" :class="rateColor">
-        <div class="sv">{{ stats.rate }}<small>%</small></div>
-        <div class="sk">{{ t("history.stat.rate") }}</div>
+      <div class="header-meta">
+        <h1 class="page-title">{{ t("activity.title") }}</h1>
+        <p class="page-desc">{{ t("activity.desc") }}</p>
       </div>
     </div>
 
-    <p v-if="error" class="error">{{ error }}</p>
-
-    <div v-if="!loading && state.sessions.length === 0" class="empty card">
-      <div class="big">◈</div>
-      <p>{{ t("history.empty") }}</p>
-    </div>
-
-    <section v-for="[label, items] in grouped" :key="label" class="day">
-      <h3>{{ label }}</h3>
-      <div class="row-list">
-        <div
-          v-for="s in items"
-          :key="s.id"
-          class="row session-row card-sm"
-          @click="openDetail(s.id)"
-        >
-          <span class="sid mono">#{{ s.num.toString().padStart(5, "0") }}</span>
-          <span class="time mono">{{ fmtTime(s.started_at) }}</span>
-          <RiskBadge :level="s.risk" />
-          <span
-            v-if="s.mode"
-            class="row-mode"
-            :class="s.mode === 'observe' ? 'row-mode-a' : 'row-mode-b'"
+    <div class="card activity-card">
+      <div class="card-head">
+        <div class="tabs">
+          <button
+            v-for="tb in TABS"
+            :key="tb.key"
+            class="tab"
+            :class="{ active: activeTab === tb.key }"
+            @click="activeTab = tb.key; page = 1"
           >
-            {{ s.mode === 'observe' ? t('session.mode.badgeObserve') : t('session.mode.badgeProtected') }}
-          </span>
-          <span class="counts mono mini">
-            <span class="c create">{{ s.counts.create }}</span>
-            <span class="c modify">{{ s.counts.modify }}</span>
-            <span class="c delete">{{ s.counts.delete }}</span>
-            <span class="c rename">{{ s.counts.rename }}</span>
-          </span>
-          <span class="sensitive-count" v-if="s.sensitive_count" title="sensitive">
-            ⚠ {{ s.sensitive_count }}
-          </span>
-          <span class="dur mono">{{ fmtDuration(s.duration_secs) }}</span>
-          <span v-if="s.undone" class="undone tag tag-flag">{{ t("history.tag.undone") }}</span>
-          <span v-else-if="s.status === 'denied'" class="tag tag-flag">{{
-            t("history.tag.denied")
-          }}</span>
-          <span class="view">{{ t("history.view") }}</span>
+            <span class="tab-dot" :class="tb.key" />
+            {{ t(tb.labelKey) }}
+          </button>
         </div>
-      </div>
-    </section>
-
-    <div v-if="detail" class="card detail">
-      <div class="detail-head">
-        <div>
-          <div class="detail-kicker">
-            <span class="sid-mini mono">#{{ detail.summary.num.toString().padStart(5, "0") }}</span>
-            <span class="dur-mini mono">{{ fmtDuration(detail.summary.duration_secs) }}</span>
+        <div class="tools-row">
+          <div class="tool-wrap" :class="{ open: filterOpen }">
+            <button class="btn btn-ghost btn-sm" @click="filterOpen = !filterOpen">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              {{ t("activity.filter") }}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="10" height="10"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div v-if="filterOpen" class="filter-dd">
+            </div>
           </div>
-          <h2>
-            {{ t("session.chip") }} #{{ detail.summary.num.toString().padStart(5, "0") }}
-          </h2>
-          <p class="sub-line mono">{{ detail.summary.workspace }}</p>
-          <p class="sub-line-2">
-            {{ detail.actions.length }} {{ t("history.detail.actions") }}
-            <template v-if="detail.summary.sensitive_count">
-              · {{ detail.summary.sensitive_count }} {{ t("history.detail.sensitive") }}
-            </template>
-            <template v-if="detail.summary.outside_count">
-              · {{ detail.summary.outside_count }} {{ t("history.detail.outside") }}
-            </template>
-          </p>
-        </div>
-        <div class="detail-meta">
-          <RiskBadge :level="detail.summary.risk" />
-          <span
-            v-if="detail.summary.mode"
-            class="row-mode"
-            :class="detail.summary.mode === 'observe' ? 'row-mode-a' : 'row-mode-b'"
-          >
-            {{ detail.summary.mode === 'observe' ? t('session.mode.observe') : t('session.mode.protected') }}
-          </span>
-          <span v-if="detail.summary.undone" class="tag tag-flag">{{ t("history.tag.undone") }}</span>
-          <span v-else-if="detail.summary.status === 'denied'" class="tag tag-flag">
-            {{ t("history.tag.denied") }}
-          </span>
+          <div class="search-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="s-ico"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input v-model="search" class="search-input" :placeholder="t('activity.search')" />
+          </div>
         </div>
       </div>
-      <ActionList :actions="detail.actions" :limit="100" />
-      <div class="detail-actions">
-        <button
-          class="btn btn-danger"
-          :disabled="undoing || detail.summary.undone"
-          @click="undo(detail.summary.id)"
-        >
-          <span v-if="undoing" class="spin small"></span>
-          {{ detail.summary.undone ? t("history.undone") : `↶ ${t("history.undo")}` }}
-        </button>
+
+      <!-- Empty state -->
+      <div v-if="filtered.length === 0" class="empty-state">
+        <div class="e-ico-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="e-ico"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="e-k">{{ t("empty.noActivity.k") }}</div>
+        <p class="e-v">{{ t("empty.noActivity.v") }}</p>
+      </div>
+
+      <div v-else class="tbl-wrap">
+        <table class="act-tbl">
+          <thead>
+            <tr>
+              <th class="col-menu">{{ t("activity.col.menu") }}</th>
+              <th class="col-time">{{ t("activity.col.time") }}</th>
+              <th class="col-act">{{ t("activity.col.action") }}</th>
+              <th class="col-src">{{ t("activity.col.source") }}</th>
+              <th class="col-risk">{{ t("activity.col.risk") }}</th>
+              <th class="col-res">{{ t("activity.col.result") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(e, idx) in paged" :key="(e as any).id || idx" class="row" @click="rowMenu = null">
+              <td class="col-menu">
+                <button class="btn-mini-menu" :class="{open: rowMenuOpen(String((e as any).id || idx))}" @click.stop="toggleRowMenu($event, String((e as any).id || idx))">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+                </button>
+                <div v-if="rowMenuOpen(String((e as any).id || idx))" class="row-dd" @click.stop">
+                </div>
+              </td>
+              <td class="col-time">
+                <span class="t-time">{{ fmtTime(e.timestamp) }}</span>
+                <span class="t-date">{{ fmtDate(e.timestamp) }}</span>
+              </td>
+              <td class="col-act">
+                <div class="act-main">
+                  <RiskBadge :level="e.risk" size="md" class="act-rb" />
+                  <span class="act-target mono">{{ e.target || "—" }}</span>
+                </div>
+                <div class="act-cat">{{ e.category }}</div>
+              </td>
+              <td class="col-src">
+                <span class="src-pill">{{ sourceLabel(e) }}</span>
+              </td>
+              <td class="col-risk">
+                <RiskBadge :level="e.risk" size="md" />
+              </td>
+              <td class="col-res">
+                <span class="res" :class="resultClass(e)">
+                  <svg v-if="e.decision === 'allow'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg v-else-if="e.decision === 'deny'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  {{ t(resultKey(e)) }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="filtered.length > 0" class="foot">
+        <div class="foot-k">{{ tf("activity.showing", { shown: String(paged.length), total: String(filtered.length) }) }}</div>
+        <div class="pager">
+          <button class="pg-btn" :disabled="page === 1" @click="goPage(page - 1)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <template v-for="(p, i) in pageWindow()" :key="i">
+            <span v-if="p === '…'" class="pg-ell">…</span>
+            <button v-else class="pg-btn" :class="{active: p === page}" @click="goPage(p as number)">{{ p }}</button>
+          </template>
+          <button class="pg-btn" :disabled="page === pages" @click="goPage(page + 1)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.history {
-  max-width: 960px;
+.view-shell {
+  max-width: 1280px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
+  padding: 20px 24px 28px;
 }
-
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+.page-header { display: flex; flex-direction: column; gap: 10px; }
+.back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid var(--border); padding: 7px 12px;
+  border-radius: 8px; color: var(--text-dim); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; font-family: var(--sans); width: fit-content;
 }
+.back-btn:hover { background: rgba(255,255,255,0.03); color: var(--green); border-color: rgba(163,230,53,0.3); }
+.back-ico { width: 13px; height: 13px; }
+.header-meta { display: flex; flex-direction: column; gap: 4px; }
+.page-title { font-size: 22px; font-weight: 800; letter-spacing: 0.2px; color: var(--text); margin: 0; }
+.page-desc { color: var(--text-dim); font-size: 12.5px; line-height: 1.55; margin: 0; }
 
-.page-head .title {
-  font-size: 22px;
-  font-weight: 700;
+.activity-card { padding: 14px 16px 16px; }
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; padding: 4px 2px 12px; margin-bottom: 6px;
+  border-bottom: 1px solid var(--border-soft);
 }
-
-.page-head .subtitle {
-  color: var(--text-dim);
-  font-size: 12.5px;
-  max-width: 620px;
-  line-height: 1.5;
-  margin-top: 4px;
+.tabs {
+  display: inline-flex; align-items: center;
+  background: rgba(255,255,255,0.025); border: 1px solid var(--border);
+  padding: 4px; border-radius: 10px; gap: 2px;
 }
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
+.tab {
+  background: transparent; border: none; padding: 6px 12px 6px 10px;
+  border-radius: 7px; font-size: 12px; font-weight: 600; color: var(--text-dim);
+  cursor: pointer; font-family: var(--sans); transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 7px;
 }
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--bg-card); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
+.tab-dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; }
+.tab-dot.allowed { background: var(--green); }
+.tab-dot.blocked { background: #ef4444; }
+.tab-dot.asked   { background: #eab308; }
+.tab-dot.all     { background: #cbd5e1; }
 
-@media (max-width: 760px) {
-  .stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.tools-row { display: inline-flex; align-items: center; gap: 10px; }
+.tool-wrap { position: relative; }
+.btn-sm { padding: 6px 11px; font-size: 12px; }
+.filter-dd {
+  position: absolute; z-index: 900; right: 0; top: calc(100% + 6px);
+  min-width: 180px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+  font-size: 12px; color: var(--text-dim);
 }
-
-.stat {
-  padding: 14px 18px;
-  position: relative;
-  overflow: hidden;
+.ph-dd { font-size: 12px; }
+.search-wrap { position: relative; }
+.s-ico { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--text-faint); }
+.search-input {
+  width: 240px; background: rgba(255,255,255,0.025); border: 1px solid var(--border);
+  color: var(--text); font-size: 12px; padding: 7px 11px 7px 30px; border-radius: 8px;
+  font-family: var(--sans); transition: border-color 0.15s;
 }
+.search-input:focus { outline: none; border-color: rgba(163,230,53,0.45); }
+.search-input::placeholder { color: var(--text-faint); }
 
-.stat::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 3px;
-  opacity: 0.6;
+/* Empty */
+.empty-state {
+  padding: 48px 20px; display: flex; flex-direction: column;
+  align-items: center; gap: 10px; text-align: center;
 }
-
-.stat:nth-child(1)::after { background: var(--green); }
-.stat:nth-child(2)::after { background: var(--red); }
-.stat:nth-child(3)::after { background: var(--amber); }
-.stat.rate::after { background: var(--green); }
-.stat.rate.amber::after { background: var(--amber); }
-.stat.rate.red::after { background: var(--red); }
-
-.sv {
-  font-family: var(--mono);
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1;
+.e-ico-wrap {
+  width: 56px; height: 56px; border-radius: 14px;
+  background: rgba(163,230,53,.07); color: var(--green);
+  display: grid; place-items: center; margin-bottom: 4px;
 }
+.e-ico { width: 26px; height: 26px; }
+.e-k { font-size: 14px; font-weight: 700; color: var(--text); }
+.e-v { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin: 0; max-width: 400px; }
 
-.sv small {
-  font-size: 14px;
-  opacity: 0.7;
-  margin-left: 2px;
+/* Table */
+.tbl-wrap { overflow-x: auto; margin-top: 8px; }
+.act-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.act-tbl thead th {
+  position: sticky; top: 0; text-align: left;
+  background: rgba(7,9,13,0.96); color: var(--text-faint);
+  font-weight: 600; font-size: 10.5px; letter-spacing: 0.5px;
+  text-transform: uppercase; padding: 10px 12px; border-bottom: 1px solid var(--border-soft);
 }
+.act-tbl tbody td { padding: 11px 12px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+.act-tbl tbody tr.row:hover { background: rgba(255,255,255,0.02); cursor: default; }
+.act-tbl tbody tr.row:last-child td { border-bottom: none; }
+.col-menu { width: 38px; padding-left: 10px !important; }
+.col-time { width: 110px; white-space: nowrap; }
+.col-src  { width: 140px; }
+.col-risk { width: 108px; }
+.col-res  { width: 130px; }
 
-.sv.red { color: #fca5a5; }
-.sv.amber { color: var(--amber); }
-.sv.green { color: var(--green); }
-.sv.purple { color: var(--purple); }
+.btn-mini-menu {
+  background: transparent; border: none; padding: 4px; border-radius: 6px;
+  color: var(--text-faint); cursor: pointer; display: grid; place-items: center; transition: all 0.12s;
+}
+.btn-mini-menu:hover, .btn-mini-menu.open { background: rgba(255,255,255,0.05); color: var(--text); }
+.row-dd {
+  position: absolute; z-index: 50; margin-top: 4px; left: -8px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px; min-width: 150px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+}
+.dd-item { padding: 6px 9px; border-radius: 5px; font-size: 12px; color: var(--text-faint); }
+.t-time { display: block; color: var(--text); font-family: var(--mono); font-weight: 600; font-size: 12px; }
+.t-date { display: block; color: var(--text-faint); font-size: 10.5px; margin-top: 2px; }
+.act-main { display: flex; align-items: center; gap: 8px; }
+.act-rb { flex-shrink: 0; }
+.act-target { color: var(--text); font-size: 12.5px; word-break: break-all; font-weight: 500; }
+.act-cat { margin-top: 3px; color: var(--text-faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; font-family: var(--mono); }
+.src-pill {
+  display: inline-flex; align-items: center; padding: 3px 8px;
+  background: rgba(148,163,184,0.08); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-dim); font-size: 11px; font-weight: 600;
+}
+.res {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px;
+  border-radius: 7px; font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0.2px; font-family: var(--mono);
+}
+.res.res-allow { background: rgba(163,230,53,.10); color: var(--green); border: 1px solid rgba(163,230,53,.28); }
+.res.res-block { background: rgba(239,68,68,.10);  color: #f87171; border: 1px solid rgba(239,68,68,.28); }
+.res.res-ask   { background: rgba(234,179,8,.10);  color: #eab308; border: 1px solid rgba(234,179,8,.28); }
 
-.sk {
-  font-size: 11px;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-top: 4px;
+/* Footer pager */
+.foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 6px 2px; color: var(--text-faint); font-size: 12px;
 }
-
-.error {
-  color: #fca5a5;
-  font-size: 12.5px;
-  font-family: var(--mono);
+.pager { display: inline-flex; align-items: center; gap: 4px; }
+.pg-btn {
+  min-width: 28px; height: 28px; background: transparent; border: 1px solid var(--border);
+  color: var(--text-dim); border-radius: 7px; padding: 0 8px; font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: var(--sans); transition: all 0.12s;
+  display: inline-flex; align-items: center; justify-content: center;
 }
-
-.empty {
-  text-align: center;
-  padding: 44px 24px;
-  color: var(--text-dim);
+.pg-btn:hover:not(:disabled) { color: var(--text); border-color: rgba(163,230,53,0.3); background: rgba(163,230,53,0.04); }
+.pg-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.pg-btn.active {
+  color: #0d1604; background: linear-gradient(180deg, var(--green), var(--green-soft));
+  border-color: rgba(163,230,53,0.55); font-weight: 800;
 }
-
-.empty .big {
-  font-size: 34px;
-  margin-bottom: 10px;
-  color: var(--text-faint);
-}
-
-.day h3 {
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text-faint);
-  margin: 18px 6px 8px;
-}
-
-.card-sm {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-}
-
-.session-row {
-  cursor: pointer;
-  transition: all 0.12s ease;
-}
-
-.session-row:hover {
-  background: var(--bg-card-hover);
-  border-color: var(--green);
-  transform: translateY(-1px);
-}
-
-.sid {
-  color: var(--text);
-  font-weight: 700;
-  width: 84px;
-}
-
-.time {
-  color: var(--text-dim);
-  width: 52px;
-  font-size: 12px;
-}
-
-.counts.mini {
-  flex: 1;
-  font-size: 11.5px;
-  color: var(--text-faint);
-  display: inline-flex;
-  gap: 8px;
-  font-family: var(--mono);
-}
-
-.counts.mini .create::before { content: "C "; color: var(--blue); }
-.counts.mini .modify::before { content: "M "; color: var(--green); }
-.counts.mini .delete::before { content: "D "; color: #fca5a5; }
-.counts.mini .rename::before { content: "R "; color: var(--amber); }
-
-.sensitive-count {
-  font-size: 11px;
-  color: #fcd34d;
-  font-weight: 700;
-  font-family: var(--mono);
-}
-
-.dur {
-  color: var(--text-faint);
-  width: 64px;
-  font-size: 12px;
-}
-
-.view {
-  color: var(--green);
-  font-size: 12px;
-  opacity: 0.6;
-}
-.session-row:hover .view { opacity: 1; }
-
-.undone {
-  margin-left: 4px;
-}
-
-.detail {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  position: relative;
-}
-
-.detail-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.detail-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
-}
-
-.sid-mini {
-  color: var(--green);
-  font-size: 11.5px;
-  font-weight: 700;
-}
-
-.dur-mini {
-  color: var(--text-faint);
-  font-size: 11.5px;
-}
-
-.detail h2 {
-  font-size: 18px;
-}
-
-.sub-line {
-  color: var(--text-faint);
-  font-size: 12px;
-  margin-top: 2px;
-}
-
-.sub-line-2 {
-  color: var(--text-dim);
-  font-size: 13px;
-  margin-top: 4px;
-}
-
-.detail-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.detail-actions {
-  display: flex;
-  gap: 10px;
-  padding-top: 4px;
-}
-
-.spin {
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  display: inline-block;
-}
-.spin.small {
-  width: 10px;
-  height: 10px;
-  border-width: 1.7px;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.row-mode {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.6px;
-  font-family: var(--mono);
-}
-
-.row-mode-a {
-  background: rgba(56, 189, 248, 0.15);
-  color: var(--blue);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-}
-
-.row-mode-b {
-  background: var(--green-glow);
-  color: var(--green);
-  border: 1px solid rgba(34, 197, 94, 0.35);
-}
+.pg-ell { color: var(--text-faint); padding: 0 4px; font-size: 12px; }
+.mono { font-family: var(--mono); }
 </style>

@@ -126,8 +126,7 @@ fn prune_expired(pending: &mut HashMap<String, Pending>) {
         let max = Duration::from_secs(p.request.timeout_secs.max(1) as u64);
         // The waiter being `None` means someone already resolved it but the
         // entry hasn't been removed yet — drop it.
-        let alive = p.waiter.is_some() && now.duration_since(p.created_at) < max;
-        alive
+        p.waiter.is_some() && now.duration_since(p.created_at) < max
     });
 }
 

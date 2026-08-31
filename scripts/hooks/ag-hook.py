@@ -107,6 +107,8 @@ def ask_engine(exe: str, cmd: str) -> dict:
         capture_output=True,
         timeout=8,
     )
+    if proc.returncode != 0:
+        raise RuntimeError(f"policy-check exited with status {proc.returncode}")
     # The engine's stdout encoding varies by platform (UTF-8 on Unix, GBK on
     # Windows). Decode by trial; never let a decode error crash the adapter.
     raw_out = proc.stdout or b""
@@ -119,7 +121,7 @@ def ask_engine(exe: str, cmd: str) -> dict:
             continue
     if not out:
         out = raw_out.decode("utf-8", errors="replace")
-    decision = "allow"
+    decision = None
     matched = ""
     reason = ""
     for line in out.splitlines():
@@ -130,6 +132,8 @@ def ask_engine(exe: str, cmd: str) -> dict:
             matched = line.split(":", 1)[1].strip()
         elif line.startswith("reason:"):
             reason = line.split(":", 1)[1].strip()
+    if decision not in {"allow", "confirm", "deny"}:
+        raise RuntimeError("policy-check returned no valid decision")
     return {"decision": decision, "reason": reason, "matched": matched}
 
 
@@ -206,7 +210,7 @@ def main() -> int:
 
     try:
         verdict = ask_engine(exe, cmd)
-    except (subprocess.SubprocessError, OSError) as e:
+    except (subprocess.SubprocessError, OSError, RuntimeError) as e:
         return fail(f"engine error: {e}", payload)
 
     decision = verdict["decision"]

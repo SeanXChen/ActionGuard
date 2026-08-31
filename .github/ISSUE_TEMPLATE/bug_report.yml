@@ -12,7 +12,7 @@ body:
     attributes:
       label: ActionGuard version
       description: Output of `actionguard --version`. If you couldn't install it, write "n/a".
-      placeholder: "0.2.0"
+      placeholder: "0.3.0"
     validations:
       required: true
   - type: dropdown
